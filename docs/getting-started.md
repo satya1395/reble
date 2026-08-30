@@ -69,4 +69,3 @@ catalog:
 ## Learn more
 
 - [Architecture & implementation plan](architecture.md)
-- [Example project](../examples/ecommerce/)

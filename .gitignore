@@ -1,77 +1,33 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-*.iml
+.venv/
+venv/
+dist/
+build/
 
 # Testing
 .coverage
 .pytest_cache/
 htmlcov/
 
-# Node
-node_modules/
-npm-debug.log
-yarn-error.log
-
-# Environment variables
-.env
-.env.local
-.env.*.local
-
-# Docker
-.dockerignore
-
-# Logs
-logs/
-*.log
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Build artifacts
-dist/
-build/
-*.whl
-
-# Spike artifacts (generated data, venvs)
-.venv/
+# Spike artifacts (generated data)
 spikes/**/warehouse*/
 spikes/**/iceberg_wh/
 spikes/**/db.db
+spikes/**/*.duckdb
 spikes/**/.cache/
+
+# Environment
+.env
+.env.*
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Logs
+*.log

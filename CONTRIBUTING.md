@@ -1,66 +1,43 @@
 # Contributing to Reble
 
-Welcome! We're excited you want to contribute to Reble. This document outlines guidelines and processes for contributing.
+Welcome! Reble is in the **design phase** — the architecture is documented and the
+Phase 0 spikes are validated, but the product code is not written yet. Right now the
+most valuable contribution is **feedback on the design**.
 
-## Code of Conduct
+## How to contribute today
 
-We are committed to providing a welcoming and inclusive environment. Please be respectful and constructive in all interactions.
+- **Design feedback:** read [docs/architecture.md](docs/architecture.md) and open a
+  [Discussion](../../discussions) — especially if you've fought with dev environments,
+  Slim CI, or data diffing on a real team.
+- **Bug in a spike?** The spikes in `spikes/` are reproducible
+  (`python -m venv .venv && .venv/bin/pip install ...` per each spike's RESULTS.md).
+  Open an issue with the output.
+- **Your workflow:** tell us how you test pipeline changes today. This directly shapes
+  what gets built. Open a Discussion.
 
-## How to Contribute
-
-### Reporting Bugs
-
-- Check if the bug has already been reported in [Issues](https://github.com/rebleio/reble/issues)
-- Create a new issue with:
-  - Clear title and description
-  - Steps to reproduce
-  - Expected vs actual behavior
-  - Environment (OS, version, etc.)
-
-### Suggesting Features
-
-- Open a discussion in [Discussions](https://github.com/rebleio/reble/discussions) first
-- Or create an issue labeled `enhancement`
-- Describe the use case and why it matters
-
-### Submitting Code
-
-1. **Fork the repo** and create a branch for your feature/fix
-2. **Write tests** for new functionality
-3. **Follow code style** — consistent with existing codebase
-4. **Commit with clear messages** — reference issues if applicable
-5. **Push and create a Pull Request** with description of changes
-6. **Address review feedback** — we'll iterate together
-
-### Development Setup
-
-```bash
-git clone https://github.com/yourusername/reble.git
-cd reble
-# Install dependencies (specifics TBD)
-# Run tests
-# Start dev server
-```
-
-## Project Structure
+## Repository layout
 
 ```
 reble/
-├── docs/              # Documentation
-├── examples/          # Example projects
-├── src/               # Source code
-│   ├── core/          # Core branching/lineage logic
-│   ├── api/           # REST API
-│   ├── ui/            # Web UI
-│   └── cli/           # Command-line interface
-├── tests/             # Test suite
-├── docker-compose.yml # Local dev environment
-└── README.md
+├── docs/
+│   ├── architecture.md      # Architecture & implementation plan (start here)
+│   └── getting-started.md   # Intended v0.1 experience (aspirational for now)
+├── spikes/                  # Validated feasibility spikes with reproducible scripts
+│   ├── 01-pyiceberg-branches/
+│   └── 03-sqlmesh-embedding/
+└── src/                     # Product code (coming — see the plan in docs/)
 ```
 
-## Questions?
+## Once code lands
 
-- Open a discussion in [GitHub Discussions](https://github.com/rebleio/reble/discussions)
-- Check existing docs in `/docs`
+Standard flow: fork → branch → tests for new functionality → PR with a clear
+description. Style and tooling details will be documented when `src/` exists.
 
-Thanks for contributing! 🙌
+## Code of conduct
+
+Be respectful and constructive. We're building a tool whose entire premise is making
+it safe to try things — the community should feel the same way.
+
+## License
+
+Contributions are accepted under Apache 2.0 (see [LICENSE](LICENSE)).
