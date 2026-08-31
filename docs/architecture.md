@@ -247,6 +247,36 @@ team-wide. (Future option worth a spike: S3 conditional writes now allow
 compare-and-swap, so branch state could live in the bucket itself —
 "the bucket is the entire warehouse, branches included.")
 
+### The branch resolver and its adapters
+
+Reble's query story is an **adapter, never an engine**. The core asset is the
+branch resolver: the small piece of logic that knows, for the current branch,
+that table X means ref-snapshot A, table Y means pinned-snapshot B, and table Z
+means epoch-snapshot C. Everything else is choosing which skin the resolver
+wears:
+
+| Adapter form | How it works | Status |
+|---|---|---|
+| **In-process** (the runner; ad-hoc query) | resolver picks snapshots, hands Arrow views to embedded DuckDB | runner shipped |
+| **Network** (`reble catalog serve`) | the same resolver behind the standard Iceberg REST catalog protocol, so *any* engine — DuckDB, Spark, Trino, BI tools — attaches normally and is branch-aware without knowing Reble exists | roadmap; the long-term "branch your existing lakehouse" wedge |
+
+Same resolver, two skins. Engines stay someone else's problem forever; Reble
+adapts branch semantics onto whatever engine you already use. This is the
+concrete meaning of "not a query engine, storage engine, or table format."
+
+**Using your own tools today:** `main` is standard Iceberg, so existing tools
+already work on it, no Reble involved — e.g. plain DuckDB:
+
+```sql
+INSTALL iceberg; LOAD iceberg;
+SELECT * FROM iceberg_scan('warehouse/demo.db/example/metadata/v3.metadata.json');
+```
+
+Branches are where external tools go blind until the network adapter ships:
+a branch is a ref plus reble's manifest (scope, pins, epoch), and something
+must resolve that context. In-process, Reble does; over the network, the REST
+proxy will.
+
 ### Load-bearing design decisions
 
 **Language: Python.** SQLGlot, pyiceberg, and DuckDB all live natively in Python;
