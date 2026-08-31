@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS current (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     branch TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS published (
+    ctx TEXT NOT NULL,      -- 'main' or a branch name
+    tbl TEXT NOT NULL,
+    fp  TEXT NOT NULL,      -- sqlmesh snapshot identifier last published there
+    PRIMARY KEY (ctx, tbl)
+);
 """
 
 
@@ -103,7 +109,29 @@ class StateStore:
         if self.current_branch() == name:
             self.set_current(MAIN)
         self._db.execute("DELETE FROM branches WHERE name = ?", (name,))
+        self._db.execute("DELETE FROM published WHERE ctx = ?", (name,))
         self._db.commit()
+
+    # -- publish fingerprints (which sqlmesh snapshot each table last got) -----
+    def published_fp(self, ctx: str, tbl: str) -> str | None:
+        row = self._db.execute(
+            "SELECT fp FROM published WHERE ctx = ? AND tbl = ?", (ctx, tbl)
+        ).fetchone()
+        return row[0] if row else None
+
+    def set_published_fp(self, ctx: str, tbl: str, fp: str) -> None:
+        self._db.execute(
+            "INSERT INTO published VALUES (?,?,?) "
+            "ON CONFLICT (ctx, tbl) DO UPDATE SET fp = excluded.fp",
+            (ctx, tbl, fp))
+        self._db.commit()
+
+    def carry_published_to_main(self, branch: str, tables: list[str]) -> None:
+        """On promote: the branch's published versions ARE main's now."""
+        for t in tables:
+            fp = self.published_fp(branch, t)
+            if fp is not None:
+                self.set_published_fp(MAIN, t, fp)
 
     def expired(self, now: float | None = None) -> list[BranchManifest]:
         now = now or time.time()

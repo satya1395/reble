@@ -38,8 +38,8 @@ def _norm(ident: str) -> str:
     return ".".join(parts[-2:])
 
 
-def _already_published(engine: BranchEngine, table: str, manifest) -> bool:
-    """True when the model's output already exists where this run would put it."""
+def _exists_at(engine: BranchEngine, table: str, manifest) -> bool:
+    """The model's output physically exists where this run would put it."""
     from pyiceberg.exceptions import NoSuchTableError
     try:
         tbl = engine.catalog.load_table(table)
@@ -126,18 +126,28 @@ def run(cfg: RebleConfig, engine: BranchEngine) -> RunResult:
             plan = ctx.plan(auto_apply=True, no_prompts=True)
         res.changed = sorted(_norm(s.name) for s in plan.new_snapshots)
 
+        # sqlmesh snapshot identifier per model output table: SQLMesh reuses
+        # snapshots across environments, so "did the plan create new snapshots"
+        # is NOT "is my published copy current" — compare fingerprints instead
+        fps = {_norm(name): str(s.identifier) for name, s in ctx.snapshots.items()}
+        pub_ctx = manifest.name if manifest else "main"
+
         # -- 3. publish model outputs to Iceberg (guarded) --------------------
         for m in ctx.models.values():
             target = _norm(m.name)
+            fp = fps.get(target)
+            stale = fp is None or fp != engine.state.published_fp(pub_ctx, target)
             if manifest and target not in manifest.scope:
-                if target in res.changed:
+                if stale:
                     res.guard_skipped.append(target)
                 continue
-            if target not in res.changed and _already_published(engine, target, manifest):
-                continue   # unchanged and present: nothing to publish
+            if not stale and _exists_at(engine, target, manifest):
+                continue   # this exact snapshot version is already published there
             schema, name = target.rsplit(".", 1)
             src_schema = f"{schema}__{env}" if manifest else schema
             df = ctx.fetchdf(f'SELECT * FROM "{src_schema}"."{name}"')
             engine.write(target, pa.Table.from_pandas(df), mode="overwrite")
+            if fp is not None:
+                engine.state.set_published_fp(pub_ctx, target, fp)
             res.published.append(target)
     return res

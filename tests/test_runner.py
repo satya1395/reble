@@ -87,3 +87,26 @@ def test_guard_reports_out_of_scope_change(project):
     res = run(cfg, eng)
     assert "demo.orders_clean" in res.guard_skipped
     assert rows(eng, "demo.orders_clean").num_rows == 2      # iceberg main untouched
+
+
+def test_main_run_after_branch_promote_refreshes_downstream(project):
+    """Regression: SQLMesh reuses snapshots across environments, so a prod plan
+    after a branch run has no NEW snapshots — but Iceberg main still needs the
+    refreshed downstream tables published."""
+    cfg, eng = project
+    run(cfg, eng)                                            # main baseline
+
+    eng.create("fix", ["demo.orders_clean"])                 # totals NOT in scope
+    (cfg.project_dir / "models" / "orders_clean.sql").write_text(
+        "MODEL (name demo.orders_clean, kind FULL);\n"
+        "SELECT id, amount FROM raw.orders   -- keep negatives\n"
+    )
+    run(cfg, eng)                                            # branch run
+    eng.promote()
+
+    res = run(cfg, eng)                                      # back on main
+    assert "demo.totals" in res.published                    # downstream refreshed
+    assert rows(eng, "demo.totals").to_pydict()["total"] == [25.0]  # 10-5+20
+
+    res2 = run(cfg, eng)                                     # idempotent
+    assert res2.published == []

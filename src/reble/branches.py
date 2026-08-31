@@ -174,6 +174,7 @@ class BranchEngine:
             promoted.append(t)
 
         name = m.name
+        self.state.carry_published_to_main(name, promoted)
         self.state.remove(name)                       # also resets current to main
         return {"branch": name, "promoted": promoted, "stale_pins": stale_pins}
 
