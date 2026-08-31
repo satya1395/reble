@@ -17,5 +17,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - run: pip install -e ".[dev]"
+      # install the CERTIFIED version set (full transitive freeze), then reble
+      - run: pip install -r requirements-lock.txt
+      - run: pip install --no-deps -e . && pip install pytest
       - run: pytest tests/ -q

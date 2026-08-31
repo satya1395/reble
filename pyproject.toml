@@ -21,6 +21,7 @@ classifiers = [
 dependencies = [
     # exact pins: spikes double as upgrade regression tests (see spikes/*/RESULTS.md)
     "pyiceberg[sql-sqlite,pyarrow]==0.11.1",
+    "pyarrow==25.0.1",
     "duckdb==1.5.5",
     "sqlmesh==0.236.1",
     "click>=8.1",

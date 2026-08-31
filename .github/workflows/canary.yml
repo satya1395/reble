@@ -1,0 +1,32 @@
+name: canary
+
+# Early-warning system for the version set: installs the LATEST releases of the
+# critical dependencies (ignoring our pins) and runs the full suite + API
+# contract tests. A red canary blocks nothing — it means "the next version-set
+# promotion has work to do", ideally weeks before anyone is forced to upgrade.
+#
+# Version-set promotion procedure (when canary is green on a candidate):
+#   1. bump pins in pyproject.toml
+#   2. re-run spikes 1, 4, 5 (+ 2 at small scale) — the deep regression gate
+#   3. full suite green -> regenerate requirements-lock.txt -> commit
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  latest-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install reble with LATEST critical deps (pins ignored)
+        run: |
+          pip install --no-deps -e .
+          pip install --upgrade pyiceberg[sql-sqlite,pyarrow] pyarrow duckdb sqlglot sqlmesh click pyyaml pytest
+          pip list | grep -iE "pyiceberg|duckdb|pyarrow|sqlglot|sqlmesh"
+      - name: API contract + full suite against latest
+        run: pytest tests/ -q --deselect tests/test_api_contract.py::TestVersionSet
