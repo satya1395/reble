@@ -11,6 +11,8 @@ Semantics (see docs/architecture.md §2):
 from __future__ import annotations
 
 import time
+import warnings
+from contextlib import contextmanager
 
 import pyarrow as pa
 from pyiceberg.catalog import Catalog, load_catalog
@@ -19,6 +21,17 @@ from pyiceberg.exceptions import NoSuchTableError
 from reble.config import RebleConfig
 from reble.errors import BranchError, WriteGuardError
 from reble.state import MAIN, BranchManifest, StateStore
+
+
+@contextmanager
+def _quiet_overwrite():
+    """pyiceberg warns 'Delete operation did not match any records' when
+    overwriting an empty table — routine on a model's first publish."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="Delete operation did not match any records"
+        )
+        yield
 
 
 def open_catalog(cfg: RebleConfig) -> Catalog:
@@ -163,7 +176,8 @@ class BranchEngine:
             tbl.manage_snapshots().create_branch(snap.snapshot_id, m.name).commit()
             tbl = self.catalog.load_table(table)
         if mode == "overwrite":
-            tbl.overwrite(df, branch=m.name)
+            with _quiet_overwrite():
+                tbl.overwrite(df, branch=m.name)
         else:
             tbl.append(df, branch=m.name)
 
@@ -175,6 +189,7 @@ class BranchEngine:
             self.catalog.create_namespace_if_not_exists(ns)
             tbl = self.catalog.create_table(table, schema=df.schema)
         if mode == "overwrite":
-            tbl.overwrite(df)
+            with _quiet_overwrite():
+                tbl.overwrite(df)
         else:
             tbl.append(df)
