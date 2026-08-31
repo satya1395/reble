@@ -5,11 +5,19 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "reble"
 version = "0.0.1"
-description = "Branch your warehouse like you branch your code — local-first analytics on DuckDB + Iceberg + SQLMesh"
+description = "Your models are just SQL files. Branch your warehouse like you branch your code — local-first analytics on DuckDB + Iceberg + SQLGlot."
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 authors = [{ name = "Reble contributors" }]
+keywords = ["data-engineering", "iceberg", "duckdb", "sqlglot", "branching", "lakehouse", "data-diff", "analytics"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Database",
+    "Topic :: Software Development :: Version Control",
+]
 dependencies = [
     # exact pins: spikes double as upgrade regression tests (see spikes/*/RESULTS.md)
     "pyiceberg[sql-sqlite,pyarrow]==0.11.1",
