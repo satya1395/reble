@@ -37,7 +37,7 @@ embedded in the CLI, so your laptop and your CI runners *are* the compute — fo
 exactly as long as a run takes, and never a second of billing after.
 
 > ⚠️ **Status: pre-alpha, but real.** The full loop works today — `init → run →
-> branch → run → diff → promote`, both git orders, with 45 passing tests —
+> branch → run → diff → promote`, both git orders, with 53 passing tests —
 > `pip install reble` and go. The engine is the
 > [spike-validated](spikes/04-sqlglot-direct/RESULTS.md) SQLGlot-direct core:
 > models are plain SQL files, exactly as described below. Feedback is the most
@@ -58,19 +58,29 @@ tables you're changing**:
 ```bash
 pip install reble
 reble init my-warehouse
+git switch -c fix-orders                # branch your code like you always do…
 # edit your models…
-reble branch create fix-orders          # scope + pins inferred from your changes —
-                                        # your edited models, their downstream
-                                        # cascade, and their upstream inputs
-reble run                               # writes go to zero-copy Iceberg branch refs;
-                                        # inputs read prod as of the branch epoch
+reble run                               # …and the data branch appears: named after
+                                        # your git branch, scope + pins inferred
+                                        # (edited models, downstream cascade,
+                                        # upstream inputs frozen at the epoch);
+                                        # writes go to zero-copy Iceberg branch refs
 reble diff                              # schema + row-level diff vs your branch base
 reble promote                           # atomic fast-forward to main, clean up
 ```
 
+**One branch gesture, two artifacts.** Your git branch tracks the code change; the
+data branch that follows it holds the change's blast radius. No environments to
+configure, no branch names to invent twice. Not in a git repo (or set
+`git_sync: false` in reble.yml)? `reble branch create <name>` does the same thing
+explicitly — reble reads git state but never runs a git command for you.
+
 Both git orders work: edit-first (scope inferred from the diff) or branch-first
 (empty scope + frozen epoch; the scope grows automatically at first run, and reads
-resolve as of the moment you branched).
+resolve as of the moment you branched). And when you come back to a branch after
+two weeks, `reble status` is the "where was I?" answer: what you edited but haven't
+run, which pinned inputs moved on main under you, what commit the data reflects,
+when the branch expires. Every read command takes `--json` for scripts and bots.
 
 - **Zero-copy branches** — branched tables use native Iceberg refs (copy-on-write);
   a branch of a 10GB table costs ~nothing until you write.
@@ -380,6 +390,25 @@ catalog:
   cluster.
 - Not a full-catalog branching system (see Nessie/lakeFS for that) — Reble branches
   subsets over standard Iceberg catalogs, no migration required.
+
+## Where this is going
+
+Shipped in v0.1.0: **reble follows git** — implicit data branches on `reble run`,
+git provenance in `reble status`, `--json` on every read command. Next, in rough
+order (opinions welcome in Discussions):
+
+- **`reble branch refresh`** — re-pin a long-lived branch's inputs to now and
+  rerun, so a two-week-old branch can catch up to today's data before promote.
+- **Merge-driven promote** — on PR merge, CI promotes the data branch and the
+  bot comments what landed on main. Code merges first, data promotes second,
+  enforced.
+- **Team mode with zero servers** — shared branch state over a shared catalog;
+  AWS S3 Tables (managed Iceberg with a REST catalog) is a candidate that would
+  mean nothing to host at all.
+- **Incremental models** (v0.2) — a couple of lines in `reble.yml`, never
+  per-model boilerplate.
+- **dbt/SQLMesh importers** — `{{ ref('...') }}` and `MODEL(...)` translation
+  for gradual migration.
 
 ## Design docs
 

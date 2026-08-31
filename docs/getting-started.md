@@ -23,11 +23,14 @@ reble run
 
 # 3. Edit a model, then branch — scope and pins are inferred from your changes
 #    (your edited models + their downstream cascade; pins = their upstream inputs).
-#    Both git orders work: branch-first on a clean tree gives you an empty-scope
-#    branch with a frozen epoch, and the scope grows at first `reble run`.
+#    In a git repo the branch step disappears: `git switch -c fix-orders`, edit,
+#    and plain `reble run` creates the data branch for you (git_sync, v0.1+).
+#    Outside git — or with git_sync: false — branch explicitly. Both git orders
+#    work: branch-first on a clean tree gives you an empty-scope branch with a
+#    frozen epoch, and the scope grows at first `reble run`.
 reble branch create fix-orders
-#   scope (inferred from your changes): analytics.orders, analytics.order_totals
-#   pins  (2): raw.events, raw.customers
+#   scope  analytics.orders, analytics.order_totals  inferred from your changes
+#   pins   raw.events, raw.customers  upstream inputs, frozen now
 
 # 4. Run on the branch — writes go to zero-copy Iceberg branch refs;
 #    pinned tables read main as of the branch epoch, even while prod ingests

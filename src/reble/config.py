@@ -16,6 +16,9 @@ class RebleConfig:
     warehouse: str = "warehouse"          # path or s3:// URI
     catalog_uri: str = ""                 # empty -> sqlite inside warehouse (local mode)
     default_branch_ttl_days: int = 14
+    git_sync: bool = True                 # `reble run` on a git feature branch
+    # implicitly creates/reuses the matching data branch; set false to keep
+    # branching fully manual
     catalog_properties: dict = field(default_factory=dict)
     # passed straight to pyiceberg load_catalog — e.g. s3.endpoint,
     # s3.access-key-id for MinIO/R2; on AWS the standard credential chain
@@ -55,7 +58,7 @@ def load_config(project_dir: Path | None = None) -> RebleConfig:
     project_dir = project_dir or find_project_dir()
     raw = yaml.safe_load((project_dir / CONFIG_FILE).read_text()) or {}
     known = {"warehouse", "catalog_uri", "default_branch_ttl_days",
-             "catalog_properties"}
+             "git_sync", "catalog_properties"}
     unknown = set(raw) - known
     if unknown:
         raise ProjectError(f"unknown keys in {CONFIG_FILE}: {sorted(unknown)}")

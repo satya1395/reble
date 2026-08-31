@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import time
 from datetime import datetime
@@ -9,6 +10,8 @@ import click
 
 from reble import __version__
 from reble.errors import RebleError
+from reble.gitinfo import branchable_name, git_info
+from reble.state import MAIN
 
 GLYPH = "⎇"          # branch context, opens every command
 CHECK = "✓"
@@ -73,6 +76,53 @@ def _ago(ts: float) -> str:
     return f"{int(d // 86400)}d ago"
 
 
+def _gut(label: str) -> str:
+    """Aligned dim gutter label for status lines."""
+    return "  " + _dim(label.ljust(9))
+
+
+def _pending_edits(cfg, eng, ctx: str) -> list[str] | None:
+    """Models edited but not yet run in this context. None = couldn't tell
+    (status must keep working even when a model doesn't parse)."""
+    try:
+        from reble.models import fingerprints, load_models, topo_order
+        from reble.runner import _published_fp
+        models = load_models(cfg)
+        fps = fingerprints(models)
+        return [t for t in topo_order(models)
+                if fps[t] != _published_fp(eng, ctx, t)]
+    except Exception:
+        return None
+
+
+def _pin_drift(eng, m) -> list[str]:
+    """Pinned tables whose main has moved since the branch epoch."""
+    moved = []
+    for t, pinned in sorted(m.pins.items()):
+        try:
+            s = eng._snapshot_id(t)
+        except Exception:
+            continue
+        if s is not None and s != pinned:
+            moved.append(t)
+    return moved
+
+
+def _git_provenance(m, gi) -> str | None:
+    """Dim one-liner tying the data branch to its code, when known."""
+    if gi is None:
+        return None
+    parts = []
+    if gi.branch:
+        marker = "" if gi.branch == m.name else " — differs from this data branch"
+        parts.append(f"{gi.branch}{marker}")
+    sha = m.last_run_sha or m.git_sha
+    if sha:
+        suffix = " + uncommitted edits" if gi.dirty else ""
+        parts.append(f"data reflects {sha[:7]}{suffix}")
+    return " · ".join(parts) if parts else None
+
+
 @click.group()
 @click.version_option(__version__, prog_name="reble")
 def cli():
@@ -96,33 +146,91 @@ def init(name: str):
 
 
 @cli.command()
-def status():
-    """Show current branch, scope, and pins."""
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output")
+def status(as_json: bool):
+    """Where things stand: branch, scope, pins, staleness, git provenance.
+
+    The answer to "where was I?" — nothing here requires remembering what you
+    did last week, and it works even when a model doesn't parse.
+    """
     try:
         eng = _engine()
         m = eng.current()
     except RebleError as e:
         _fail(e)
+    cfg = eng.cfg
+    gi = git_info(cfg.project_dir)
+
     if m is None:
+        branches = [b.name for b in eng.state.list()]
+        follow = branchable_name(gi) if cfg.git_sync else None
+        if as_json:
+            click.echo(json.dumps({
+                "branch": "main", "git_branch": gi.branch if gi else None,
+                "git_sha": gi.sha if gi else None,
+                "git_dirty": gi.dirty if gi else False,
+                "branches": branches}))
+            return
         _ctx("main")
+        if follow:
+            click.echo(_gut("git") + _dim(
+                f"{follow} — no data branch yet; `reble run` will create it"))
+        if branches:
+            click.echo(_gut("branches") + ", ".join(_br(b) for b in branches))
+        else:
+            click.echo(_gut("branches") + _dim("(none yet)"))
         return
+
+    pending = _pending_edits(cfg, eng, m.name)
+    drift = _pin_drift(eng, m) if m.pins else []
+    expires_s = m.created_at + m.ttl_days * 86400 - time.time()
+    if as_json:
+        click.echo(json.dumps({
+            "branch": m.name, "created_at": m.created_at,
+            "ttl_days": m.ttl_days, "expires_in_s": max(0, int(expires_s)),
+            "open_scope": m.open_scope, "scope": m.scope,
+            "pins": m.pins, "pin_drift": drift,
+            "edited_not_run": pending,
+            "last_run_at": m.last_run_at, "last_run_sha": m.last_run_sha,
+            "git_branch": gi.branch if gi else None,
+            "git_sha": gi.sha if gi else None,
+            "git_dirty": gi.dirty if gi else False}))
+        return
+
     _ctx(m.name)
-    click.echo(f"  {_dim('created')}   {datetime.fromtimestamp(m.created_at):%Y-%m-%d %H:%M}"
-               f" {_dim(f'· ttl {m.ttl_days}d')}")
+    prov = _git_provenance(m, gi)
+    if prov:
+        click.echo(_gut("git") + _dim(prov))
+    ttl_note = (f"expires in {max(0, int(expires_s // 86400))}d"
+                if expires_s > 0 else "expired — reble gc will delete it")
+    click.echo(_gut("created")
+               + f"{datetime.fromtimestamp(m.created_at):%Y-%m-%d %H:%M} "
+               + _dim(f"· {_ago(m.created_at)} · {ttl_note}"))
+    if m.last_run_at:
+        click.echo(_gut("last run") + _ago(m.last_run_at))
+    if pending:
+        click.echo(_gut("edited") + ", ".join(_tb(t) for t in pending)
+                   + "  " + _dim("not yet run"))
+    elif pending is not None and m.last_run_at:
+        click.echo(_gut("edited") + _dim("nothing — data matches your models"))
     if m.open_scope:
-        click.echo(f"  {_dim('scope')}     {_dim('open — grows when you edit models and run')}")
+        click.echo(_gut("scope") + _dim("open — grows when you edit models and run"))
         if m.scope:
-            click.echo(f"  {_dim('writable')}  " + ", ".join(_tb(t) for t in m.scope))
-        click.echo(f"  {_dim('reads')}     {_dim('every table frozen as of the branch epoch')}")
+            click.echo(_gut("writable") + ", ".join(_tb(t) for t in m.scope))
+        click.echo(_gut("reads") + _dim("every table frozen as of the branch epoch"))
     else:
-        click.echo(f"  {_dim('writable')}  " + ", ".join(_tb(t) for t in m.scope))
+        click.echo(_gut("writable") + ", ".join(_tb(t) for t in m.scope))
         pins = sorted(m.pins)
         if pins:
             shown = ", ".join(pins[:2])
             more = f" {_dim(f'+{len(pins) - 2} more,')}" if len(pins) > 2 else ""
-            click.echo(f"  {_dim('pinned')}    {shown}{more} {_dim('frozen at epoch')}")
+            click.echo(_gut("pinned") + f"{shown}{more} {_dim('frozen at epoch')}")
         else:
-            click.echo(f"  {_dim('pinned')}    {_dim('(none)')}")
+            click.echo(_gut("pinned") + _dim("(none)"))
+    if drift:
+        click.echo(_gut("behind") + ", ".join(_tb(t) for t in drift)
+                   + "  " + _dim("moved on main since your epoch — "
+                                 "your runs still read the pinned snapshots"))
 
 
 @cli.command()
@@ -152,23 +260,80 @@ def load(table: str, file: str, overwrite: bool):
     _ok(f"{arrow.num_rows:,} rows {_dim('→')} {_tb(table)} {_dim(f'({mode})')}")
 
 
+def _follow_git(cfg, eng, gi, quiet: bool = False) -> None:
+    """Implicit branch-on-run (F14): on a git feature branch with the data
+    pointer on main, create or reuse the matching data branch — the same
+    inference `branch create` does, with zero ceremony."""
+    follow = branchable_name(gi)
+    if not follow or eng.state.current_branch() != MAIN:
+        return
+    if eng.state.get(follow) is not None:
+        eng.switch(follow)
+        if not quiet:
+            _ctx(MAIN, to=follow, suffix="· following your git branch")
+        return
+    from reble.models import upstream_closure
+    from reble.runner import analyze_project
+    scope, models = analyze_project(cfg, eng)
+    git_kw = dict(git_branch=gi.branch, git_sha=gi.sha, git_dirty=gi.dirty)
+    if not quiet:
+        _ctx(MAIN, to=follow, suffix="· data branch created from your git branch")
+    if scope:
+        m = eng.create(follow, scope,
+                       pin_tables=upstream_closure(scope, models), **git_kw)
+        if not quiet:
+            click.echo(f"  {_dim('scope')}  "
+                       + ", ".join(_tb(t) for t in m.scope)
+                       + f"  {_dim('inferred from your changes')}")
+            pins = sorted(m.pins)
+            if pins:
+                shown = ", ".join(pins[:3]) \
+                    + (f" {_dim(f'+{len(pins) - 3}')}" if len(pins) > 3 else "")
+                click.echo(f"  {_dim('pins')}   {shown}  "
+                           + _dim("upstream inputs, frozen now"))
+    else:
+        eng.create(follow, [], open_scope=True, **git_kw)
+        if not quiet:
+            click.echo(f"  {_dim('scope')}  "
+                       + _dim("open — grows when you edit models and run"))
+
+
 @cli.command()
 @click.option("--force", is_flag=True,
               help="Rerun every model regardless of change detection "
                    "(e.g. to refresh outputs after new raw data arrived)")
-def run(force: bool):
-    """Run changed models on the current branch, publish to Iceberg."""
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output")
+def run(force: bool, as_json: bool):
+    """Run changed models on the current branch, publish to Iceberg.
+
+    On a git feature branch, the matching data branch is created (or reused)
+    automatically — git is the only place you name a branch. Set
+    `git_sync: false` in reble.yml for fully manual branching.
+    """
     from reble.config import load_config
     from reble.runner import run as _run
     try:
         cfg = load_config()
         from reble.branches import BranchEngine
         eng = BranchEngine(cfg)
+        gi = git_info(cfg.project_dir) if cfg.git_sync else None
+        if gi is not None:
+            _follow_git(cfg, eng, gi, quiet=as_json)
         t0 = time.time()
         res = _run(cfg, eng, force=force)
         took = time.time() - t0
+        if res.environment != MAIN:
+            eng.state.record_run(res.environment, time.time(),
+                                 gi.sha if gi else None,
+                                 gi.dirty if gi else False)
     except RebleError as e:
         _fail(e)
+    if as_json:
+        click.echo(json.dumps({
+            "environment": res.environment, "changed": res.changed,
+            "published": res.published, "guard_skipped": res.guard_skipped,
+            "seconds": round(took, 2)}))
+        return
     _ctx(res.environment)
     on_branch = res.environment != "main"
     if res.changed:
@@ -217,7 +382,8 @@ def query_cmd(sql: str):
 
 
 @cli.command()
-def diff():
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output")
+def diff(as_json: bool):
     """Show what the current branch changes, per scoped table."""
     from reble.diffing import diff_branch
     try:
@@ -226,6 +392,16 @@ def diff():
         branch_name = eng.state.current_branch()
     except RebleError as e:
         _fail(e)
+    if as_json:
+        click.echo(json.dumps({"branch": branch_name, "tables": [
+            {"table": d.table, "kind": d.kind,
+             "rows_main": d.rows_main, "rows_branch": d.rows_branch,
+             "key": d.key, "added": d.added, "removed": d.removed,
+             "changed": d.changed, "schema_added": d.schema_added,
+             "schema_removed": d.schema_removed,
+             "profile_columns": [list(c) for c in d.profile_columns]}
+            for d in diffs]}))
+        return
     if not diffs:
         click.echo("No written tables on this branch yet — run `reble run` first.")
         return
@@ -300,7 +476,7 @@ def branch():
 
 
 @branch.command("create")
-@click.argument("name")
+@click.argument("name", required=False)
 @click.option("--tables", default=None,
               help="Comma-separated tables this branch will change "
                    "(default: inferred from your edited models via SQLGlot)")
@@ -308,12 +484,13 @@ def branch():
               help="Pin every non-scoped table instead of just the lineage-derived "
                    "upstream inputs (use when external writers touch tables SQLGlot "
                    "can't see)")
-def branch_create(name: str, tables: str | None, pin_all: bool):
+def branch_create(name: str | None, tables: str | None, pin_all: bool):
     """Create a subset branch and switch to it.
 
-    With no --tables, the scope is inferred from what you changed: edit your
-    models first, then branch. On a clean tree you get a branch-first open
-    branch whose scope grows at run time.
+    NAME defaults to your current git branch. With no --tables, the scope is
+    inferred from what you changed: edit your models first, then branch. On a
+    clean tree you get a branch-first open branch whose scope grows at run
+    time.
     """
     from reble.config import load_config
     from reble.models import upstream_closure
@@ -321,6 +498,15 @@ def branch_create(name: str, tables: str | None, pin_all: bool):
     try:
         cfg = load_config()
         eng = _engine()
+        gi = git_info(cfg.project_dir)
+        if name is None:
+            name = branchable_name(gi)
+            if name is None:
+                raise RebleError(
+                    "no branch name given and no git feature branch to take "
+                    "it from — pass a name, or `git switch -c <name>` first")
+        git_kw = dict(git_branch=gi.branch, git_sha=gi.sha,
+                      git_dirty=gi.dirty) if gi else {}
         prev = eng.state.current_branch()
         inferred = False
         if tables:
@@ -329,7 +515,7 @@ def branch_create(name: str, tables: str | None, pin_all: bool):
             scope, models = analyze_project(cfg, eng)
             inferred = True
             if not scope:
-                eng.create(name, [], open_scope=True)
+                eng.create(name, [], open_scope=True, **git_kw)
                 _ctx(prev, to=name)
                 click.echo(f"  {_dim('scope')}  "
                            + _dim("open — grows when you edit models and run"))
@@ -342,7 +528,7 @@ def branch_create(name: str, tables: str | None, pin_all: bool):
             if not inferred:
                 _, models = analyze_project(cfg, eng)
             pin_tables = upstream_closure(scope, models)   # None if uninferrable
-        m = eng.create(name, scope, pin_tables=pin_tables)
+        m = eng.create(name, scope, pin_tables=pin_tables, **git_kw)
     except RebleError as e:
         _fail(e)
     _ctx(prev, to=name)
@@ -362,7 +548,8 @@ def branch_create(name: str, tables: str | None, pin_all: bool):
 
 
 @branch.command("list")
-def branch_list():
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output")
+def branch_list(as_json: bool):
     """List branches."""
     try:
         eng = _engine()
@@ -370,6 +557,13 @@ def branch_list():
         branches = eng.state.list()
     except RebleError as e:
         _fail(e)
+    if as_json:
+        click.echo(json.dumps({"current": current, "branches": [
+            {"name": m.name, "scope": m.scope, "open_scope": m.open_scope,
+             "created_at": m.created_at, "ttl_days": m.ttl_days,
+             "git_branch": m.git_branch, "last_run_at": m.last_run_at}
+            for m in branches]}))
+        return
     dot = click.style("●", fg="green")
     mark = dot if current == "main" else " "
     click.echo(f"{mark} {_glyph()} main")

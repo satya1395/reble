@@ -85,7 +85,10 @@ class BranchEngine:
     # -- lifecycle -------------------------------------------------------------
     def create(self, name: str, scope: list[str],
                pin_tables: list[str] | None = None,
-               open_scope: bool = False) -> BranchManifest:
+               open_scope: bool = False,
+               git_branch: str | None = None,
+               git_sha: str | None = None,
+               git_dirty: bool = False) -> BranchManifest:
         """Create a subset branch.
 
         pin_tables: which tables to pin (lineage-scoped upstream inputs, when the
@@ -129,6 +132,7 @@ class BranchEngine:
             name=name, scope=sorted(scope), pins=pins, base=base,
             created_at=time.time(), ttl_days=self.cfg.default_branch_ttl_days,
             open_scope=open_scope,
+            git_branch=git_branch, git_sha=git_sha, git_dirty=git_dirty,
         )
         self.state.add(m)
         self.state.set_current(name)

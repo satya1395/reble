@@ -48,6 +48,13 @@ class BranchManifest:
     created_at: float
     ttl_days: int
     open_scope: bool = False    # branch-first: scope grows at run time
+    # git provenance (F14): what code produced this branch's data. Recorded at
+    # create and refreshed on every run; None for non-git projects.
+    git_branch: str | None = None
+    git_sha: str | None = None
+    git_dirty: bool = False
+    last_run_at: float | None = None
+    last_run_sha: str | None = None
 
 
 class StateStore:
@@ -55,11 +62,18 @@ class StateStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path)
         self._db.executescript(_SCHEMA)
-        try:  # migrate pre-open_scope state dbs
-            self._db.execute(
-                "ALTER TABLE branches ADD COLUMN open_scope INTEGER NOT NULL DEFAULT 0")
-        except sqlite3.OperationalError:
-            pass
+        for ddl in (   # additive migrations for older state dbs
+            "ALTER TABLE branches ADD COLUMN open_scope INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE branches ADD COLUMN git_branch TEXT",
+            "ALTER TABLE branches ADD COLUMN git_sha TEXT",
+            "ALTER TABLE branches ADD COLUMN git_dirty INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE branches ADD COLUMN last_run_at REAL",
+            "ALTER TABLE branches ADD COLUMN last_run_sha TEXT",
+        ):
+            try:
+                self._db.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
         self._db.execute(
             "INSERT OR IGNORE INTO current (id, branch) VALUES (1, ?)", (MAIN,)
         )
@@ -81,10 +95,13 @@ class StateStore:
             raise BranchError("'main' is not a creatable branch name")
         try:
             self._db.execute(
-                "INSERT INTO branches VALUES (?,?,?,?,?,?,?)",
+                "INSERT INTO branches (name, scope, pins, base, created_at, "
+                "ttl_days, open_scope, git_branch, git_sha, git_dirty, "
+                "last_run_at, last_run_sha) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (m.name, json.dumps(m.scope), json.dumps(m.pins),
                  json.dumps(m.base), m.created_at, m.ttl_days,
-                 int(m.open_scope)),
+                 int(m.open_scope), m.git_branch, m.git_sha, int(m.git_dirty),
+                 m.last_run_at, m.last_run_sha),
             )
         except sqlite3.IntegrityError:
             raise BranchError(f"branch {m.name!r} already exists") from None
@@ -92,13 +109,15 @@ class StateStore:
 
     def get(self, name: str) -> BranchManifest | None:
         row = self._db.execute(
-            "SELECT name, scope, pins, base, created_at, ttl_days, open_scope "
+            "SELECT name, scope, pins, base, created_at, ttl_days, open_scope, "
+            "git_branch, git_sha, git_dirty, last_run_at, last_run_sha "
             "FROM branches WHERE name = ?", (name,)
         ).fetchone()
         if row is None:
             return None
         return BranchManifest(row[0], json.loads(row[1]), json.loads(row[2]),
-                              json.loads(row[3]), row[4], row[5], bool(row[6]))
+                              json.loads(row[3]), row[4], row[5], bool(row[6]),
+                              row[7], row[8], bool(row[9]), row[10], row[11])
 
     def list(self) -> list[BranchManifest]:
         return [m for r in self._db.execute("SELECT name FROM branches ORDER BY created_at")
@@ -121,6 +140,15 @@ class StateStore:
         m.base[table] = snapshot_id
         self._db.execute("UPDATE branches SET base = ? WHERE name = ?",
                          (json.dumps(m.base), name))
+        self._db.commit()
+
+    def record_run(self, name: str, at: float, sha: str | None,
+                   dirty: bool = False) -> None:
+        """Provenance: refresh what code this branch's data reflects."""
+        self._db.execute(
+            "UPDATE branches SET last_run_at = ?, last_run_sha = ?, "
+            "git_sha = COALESCE(?, git_sha), git_dirty = ? WHERE name = ?",
+            (at, sha, sha, int(dirty), name))
         self._db.commit()
 
     def remove(self, name: str) -> None:

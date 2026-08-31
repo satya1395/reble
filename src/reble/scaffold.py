@@ -10,6 +10,9 @@ warehouse: warehouse          # local dir, or s3://bucket/prefix for team mode
 catalog_uri: ""               # empty = sqlite catalog inside the warehouse (local mode)
                               # team mode: postgresql://... or an Iceberg REST catalog uri
 default_branch_ttl_days: 14
+# git_sync: true              # on a git feature branch, `reble run` creates or
+                              # reuses the matching data branch automatically;
+                              # set false for fully manual branching
 
 # Per-model config lives here too — only for models that need something
 # non-default (a model with no entry is a FULL rebuild, always):
