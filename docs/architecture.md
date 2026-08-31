@@ -211,6 +211,21 @@ The contrast with a hosted warehouse: the identical steps happen there too,
 inside the vendor's VPC on the vendor's metered compute. Reble deletes the
 middle tier — same physics, no meter.
 
+**Memory model and the scale ceiling (honest version).** Two memory stories per
+run: DuckDB's *execution* is not RAM-bound — joins/sorts/aggregations spill to
+disk past `memory_limit`. The *input* step currently is: each needed scan is
+materialized fully into Arrow RAM before execution, so peak memory ≈ the
+projected columns of the tables the changed models read (measured: 10GB table
+→ ~12GB RSS). This is an implementation choice, not an architectural wall —
+pyiceberg's streaming readers (`to_arrow_batch_reader`) feed DuckDB batch-wise
+and drop peak RAM to ~batch size; on the roadmap (single-pass streams need
+re-scan-per-consumer care). And the format is the escape hatch for real scale:
+Reble is single-node by design, but the tables are standard Iceberg — the day
+a job outgrows one machine, Spark/Trino read the *same tables* with zero
+migration. Reble never needs to become distributed; it needs to never block
+your exit to something that is. (Arrow itself is a memory format, not an
+engine — it distributes nothing.)
+
 ### Load-bearing design decisions
 
 **Language: Python.** SQLGlot, pyiceberg, and DuckDB all live natively in Python;
