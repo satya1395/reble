@@ -294,16 +294,24 @@ to reproduce: [spike 1 — branch lifecycle](spikes/01-pyiceberg-branches/RESULT
 [spike 2 — performance](spikes/02-perf/RESULTS.md) ·
 [spike 4 — the SQLGlot-direct core](spikes/04-sqlglot-direct/RESULTS.md).
 
-## The killer workflow: branch-per-PR
+## The killer workflow: branch-per-PR — live
 
-A GitHub Action (coming next) that, on every pull request:
+**See it running on [dbt's jaffle shop](https://github.com/satya1395/jaffle-shop-classic/pull/1)**:
+a one-line fix to `customer_lifetime_value`, and the review comment answers the
+only question that matters — *"~6 customers changed, nothing added, nothing
+removed"* — computed on a zero-copy branch with epoch-pinned inputs.
 
-1. Creates a branch scoped to the changed models' tables
-2. Runs only the changed models
-3. Posts a PR comment: models changed, downstream impact, row-level diff stats
-4. Promotes on merge, cleans up on close
+On every pull request, [a ~70-line hermetic workflow](https://github.com/satya1395/jaffle-shop-classic/blob/main/.github/workflows/reble-pr.yml)
+(no services, no state, copy it into any repo):
 
-Data PRs become reviewable like code PRs — scenario 1 above, fully automated.
+1. rebuilds the main baseline from seeds
+2. creates a branch scoped to your changed models (inferred — no config)
+3. runs only the changed models against epoch-pinned inputs
+4. posts the row-level diff as a PR comment
+
+The [jaffle-shop-classic port](https://github.com/satya1395/jaffle-shop-classic)
+is also the dbt side-by-side: the original Jinja project and the plain-SQL Reble
+port live in the same repo.
 
 ## Two modes, one tool
 
