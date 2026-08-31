@@ -1,18 +1,15 @@
-# Reble: Architecture & Implementation Plan (v2)
+# Reble Architecture
 
 **Scope:** A single CLI that gives a small data team a complete local-first analytics
 platform — DuckDB + Iceberg + SQLMesh pre-wired — with **subset branching** of the
 warehouse and **branch-per-PR CI** as the killer workflow.
 
-This replaces the v1 plan. Key changes from v1:
-- Branching is **subset branching** (branch only the tables you're changing; read
-  everything else from prod, pinned), not full-catalog branching.
-- No Unity Catalog, no Trino, no web UI, no merge semantics in v1.
-- Honest timeline: ~12 weeks solo to 0.1, with validation spikes first.
+For the motivation and positioning, see [why.md](why.md). For proof the primitives
+work at target scale, see the reproducible [spikes](../spikes/).
 
 ---
 
-## 1. Product Shape
+## 1. Product shape
 
 ```
 $ reble init my-warehouse        # scaffold project (SQLMesh models, config, local catalog)
@@ -39,7 +36,7 @@ team mode (S3 + Postgres/REST catalog + CI runners) by changing config, not tool
 
 ---
 
-## 2. The Branch Model (core IP)
+## 2. The branch model (core primitive)
 
 A branch is **metadata only** — no data is copied:
 
@@ -59,16 +56,24 @@ branch "pr-123":
 - **Unbranched tables** are read through to prod but **pinned to the snapshot IDs at
   branch-creation time**, so test inputs are stable and diffs are reproducible even
   while prod keeps ingesting. Pinning is free (Iceberg time travel).
-- **Scope inference:** `--tables` is explicit in v1. Fast-follow: infer scope from the
-  SQLMesh plan (the changed models' output tables), so `reble branch create` needs no
-  arguments in the common case.
+- **Scope inference (planned):** derive the scope from the SQLMesh plan (the changed
+  models' output tables), so `reble branch create` needs no arguments in the common
+  case.
 
-**Promote ≠ merge.** v1 promote:
+**Promote ≠ merge.**
 1. If the branched tables' `main` refs haven't advanced since branch creation →
    fast-forward `main` to the branch ref (cheap, atomic per table).
 2. Otherwise → re-apply the SQLMesh plan against main (rerun the changed models).
    No data-level merge, ever. Last-write-wins data merges silently corrupt warehouses;
    we refuse to build that. Branches are ephemeral: create, test, promote or discard.
+
+**Two workflows, one loop.** Modified models get a **diff** (schema, row-level
+added/removed/changed) plus column-lineage-derived downstream impact. A **new** model
+has no counterpart to diff, so it gets a **profile** instead — schema, row counts,
+null rates, sample stats, upstream dependencies. Both flow through the same PR
+comment; the branch earns its keep for greenfield work through pinned inputs during
+iteration, isolation of work-in-progress tables, and automatic registration in the
+lineage graph on promote.
 
 **SQLMesh mapping:** one reble branch ↔ one SQLMesh environment (1:1). SQLMesh handles
 model-level change detection and virtual promotion *within* its managed models; reble
@@ -85,15 +90,15 @@ single-user) and promote sequentially:
    **lineage-aware staleness check** — if none of your models read the tables that
    advanced, fast-forward proceeds; if they do, promote requires a rebase.
 3. **Overlapping scopes:** the clean/dirty check fails (your table's main ref moved)
-   → fast-forward refused, rebase mandatory. Warn at branch *creation* when a table
-   in scope is already branched by someone else.
+   → fast-forward refused, rebase mandatory. Reble warns at branch *creation* when a
+   table in scope is already branched by someone else.
 4. **`reble branch rebase`** is a first-class command: re-pin upstreams to current
    main, rerun changed models (cheap via SQLMesh change detection), re-validate.
    Rebase-then-promote is the only path forward for a stale branch — never data merge.
 
 ---
 
-## 3. Architecture
+## 3. System architecture
 
 ```
 ┌────────────────────────────────────────────────────────────┐
@@ -122,21 +127,26 @@ single-user) and promote sequentially:
 
 **Language: Python.** SQLMesh and pyiceberg are Python libraries; wrapping them
 in-process is the whole point. "Single binary" is a distribution concern, not a
-language concern: v1 ships via `uv tool install reble` / pipx (which today feels
-binary-like); a PyApp/shiv single-file build is a fast-follow.
+language concern: v1 ships via `uv tool install reble` / pipx; a single-file build is
+a fast-follow.
 
 **Compute: DuckDB computes, pyiceberg commits.** The DuckDB iceberg extension is
-read-oriented; we do not depend on DuckDB writing Iceberg. The runner executes model
-SQL in DuckDB (reading branch-resolved Iceberg scans), collects results as Arrow, and
-commits to the branch ref via pyiceberg. This is the honest write path and it must be
-validated in the week-1 spike (see Risks).
+read-oriented; Reble does not depend on DuckDB writing Iceberg. The runner executes
+model SQL in DuckDB (reading branch-resolved Iceberg scans), collects results as
+Arrow, and commits to the branch ref via pyiceberg. Validated end-to-end in
+[spike 3](../spikes/03-sqlmesh-embedding/RESULTS.md).
+
+**Projection pushdown everywhere.** At 10GB scale the constraint is RAM, not time
+(measured in [spike 2](../spikes/02-perf/RESULTS.md)): every scan — model inputs and
+diffs — passes `selected_fields` derived from column lineage, and diffs read key +
+compared columns only, never whole rows. This is what keeps target-scale workloads
+inside laptop memory.
 
 **Catalog resolution is in-process for local, a REST proxy for team mode.** Locally,
-reble wraps the pyiceberg catalog object directly — no server needed. `reble catalog
-serve` (fast-follow, not v1) exposes the same resolver as an Iceberg REST catalog
-proxy so external engines (Trino, Spark, Snowflake) resolve branches transparently.
-The proxy is the long-term wedge ("branch your existing lakehouse, no migration");
-the in-process resolver is the same code without the HTTP layer.
+reble wraps the pyiceberg catalog object directly — no server needed. A future
+`reble catalog serve` exposes the same resolver as an Iceberg REST catalog proxy so
+external engines (Trino, Spark, Snowflake) resolve branches transparently — the
+long-term path to branching an *existing* lakehouse with no migration.
 
 **Write guards are non-negotiable.** From a branch context, any write to a table
 outside the branch scope is refused with a hard error. One corrupted prod table ends
@@ -148,7 +158,7 @@ drops their refs, and releases pins. The CI action deletes branches on PR close.
 
 ---
 
-## 4. What v1 deliberately excludes
+## 4. Deliberately out of scope (v1)
 
 - Web UI (SQLMesh ships its own UI; `reble ui` can shell out to it later)
 - Unity Catalog, Trino, Spark integrations
@@ -159,101 +169,17 @@ drops their refs, and releases pins. The CI action deletes branches on PR close.
 
 ---
 
-## 5. Timeline (~12 weeks solo)
+## 5. Validation status
 
-### Phase 0 — Spikes & validation (weeks 1–2)
-The plan is contingent on these. Do not scaffold the product first.
+All three feasibility spikes are green, on current releases, with reproducible
+scripts in [`spikes/`](../spikes/):
 
-- [x] **Spike: pyiceberg branch refs. ✅ GREEN (2026-08-30).** All operations work on
-      pyiceberg 0.11.1: create_branch, `append(branch=...)`, bidirectional isolation,
-      pinned snapshot reads, promote via `set_current_snapshot(ref_name=...)`,
-      remove_branch, DuckDB reads via Arrow. See
-      `spikes/01-pyiceberg-branches/RESULTS.md`. Note: no native fast-forward — the
-      clean/dirty promote check is ours to implement (as planned).
-- [x] **Spike: compute-path performance. ✅ GREEN at full 10GB (2026-08-30).**
-      140M rows / 10.22GB Arrow on an M4 Pro: branch create <10ms (size-independent),
-      pinned full scan 4.0s, full diff 5.9s, peak RSS 12.3GB, bulk load ~3.5M rows/s.
-      N3 is now measured, not extrapolated. See `spikes/02-perf/RESULTS.md`.
-      Design rules: lineage-driven projection pushdown on every scan; diff on
-      key+compared columns only; DuckDB memory_limit + temp spill; release Arrow refs
-      promptly.
-- [x] **Spike: SQLMesh embedding. ✅ GREEN (2026-08-30).** sqlmesh 0.236.1 drives
-      fully from Python: `Context.plan(auto_apply, no_prompts)`, programmatic dev
-      environments, `lineage()` column graphs, plan-native change detection, and
-      Arrow hand-off to pyiceberg branch commits verified end-to-end. See
-      `spikes/03-sqlmesh-embedding/RESULTS.md`. Write path confirmed: DuckDB
-      computes → Arrow → pyiceberg commits; no engine-adapter surgery needed.
-- [ ] **Validation: 15–20 interviews** with data engineers. Script: "How do you test
-      pipeline changes today? What breaks? Would branch-per-PR with row-level diffs
-      change your workflow?" Kill or reshape the project on this evidence.
-
-**Gate:** all three spikes green + interviews confirm the pain → proceed.
-
-### Phase 1 — Branch engine + CLI core (weeks 3–5)
-- [ ] Project scaffold: `reble init` (config, SQLMesh project, local warehouse,
-      SQLite catalog, seed example)
-- [ ] Branch manifest store (SQLite locally; same schema on Postgres for team mode)
-- [ ] Catalog resolver (in-process): scope → refs, pins → snapshots, guard writes
-- [ ] `reble branch create|list|switch|delete` with `--tables` scoping and TTLs
-- [ ] `reble query` / `reble shell`: DuckDB session with branch-resolved tables
-- [ ] Integration tests: branch, write, verify isolation, verify pin stability
-
-### Phase 2 — SQLMesh runner (weeks 6–8)
-- [ ] `reble run`: SQLMesh plan/apply on the current branch (branch ↔ environment)
-- [ ] Change detection surfaced: "3 models changed, 2 downstream affected" before run
-- [ ] Column-level lineage exposed via `reble lineage <model>` (read from SQLMesh's
-      APIs — no SQL parsing of our own)
-- [ ] Scope inference: derive branch table scope from the SQLMesh plan
-
-### Phase 3 — Diff + promote (weeks 9–10)
-- [ ] `reble diff`: per branched table — schema diff, row counts, row-level
-      added/removed/changed (DuckDB anti-joins over branch ref vs main ref; Iceberg
-      changelog scan where available)
-- [ ] **New-model mode:** a table with no main counterpart gets a *profile* instead
-      of a diff — schema, row count, null rates, sample stats, upstream lineage.
-      Modified models get diff + downstream impact; new models get profile + upstream
-      deps. Both flow through the same CI comment (this is the audit step of WAP for
-      greenfield work — pinned inputs + branch isolation matter here even though
-      nothing is "changed").
-- [ ] `reble promote`: fast-forward when clean, re-apply plan otherwise; release pins
-- [ ] `reble gc`: TTL expiry, ref cleanup, pin release
-
-### Phase 4 — CI workflow + release (weeks 11–12)
-- [ ] `rebleio/reble-action`: PR open → branch `pr-N` + run + **PR comment** with
-      impact summary (models changed, lineage-derived downstream impact, diff stats);
-      merge → promote; close → delete
-- [ ] Example project (e-commerce) exercised end-to-end in the action
-- [ ] Docs: quickstart (< 5 min to first branch), CI setup guide, architecture
-- [ ] Release 0.1.0: PyPI + GitHub release + announcement post
-
----
-
-## 6. Risks
-
-| Risk | Likelihood | Mitigation |
+| Spike | What it proves | Status |
 |---|---|---|
-| pyiceberg branch-ref writes immature | Medium | Week-1 spike; fallback to direct metadata commits; pin versions hard |
-| DuckDB↔Iceberg read path too slow on pinned snapshots | Medium | Spike with 10GB; fallback: pyiceberg scan → Arrow → DuckDB |
-| SQLMesh internals shift under us (fast-moving project) | Medium | Pin version; integrate via public Python API only. Governance risk is low since the March 2026 Linux Foundation donation (open community model, no single-vendor rug-pull). Upstream a change only if the public API can't support the branch integration |
-| Pins block snapshot expiry → prod storage bloat | High if ignored | TTLs + `reble gc` in v1, CI auto-cleanup |
-| Prod write from branch context | Low, catastrophic | Hard write guards + tests before any other feature |
-| Interviews say SQLMesh envs already suffice | Real | That's why interviews are in Phase 0, before the build |
+| [01 — branch lifecycle](../spikes/01-pyiceberg-branches/RESULTS.md) | create / write / isolate / pin / promote / cleanup on Iceberg refs, plus DuckDB reads via Arrow | ✅ |
+| [02 — performance](../spikes/02-perf/RESULTS.md) | full loop at **140M rows / 10.22GB** on a laptop: branch create <10ms, full diff 5.9s | ✅ |
+| [03 — SQLMesh embedding](../spikes/03-sqlmesh-embedding/RESULTS.md) | headless plan/apply, env-per-branch, column lineage, change detection, Arrow→Iceberg branch commit | ✅ |
 
----
-
-## 7. Success criteria for 0.1
-
-1. `pip install` → first branched run in **under 5 minutes** on a laptop, no Docker.
-2. Branch-per-PR action posts a diff comment on a real repo's PR.
-3. Zero-copy verified: a branch of a 10GB table costs ~0 bytes until written.
-4. Write guard: impossible to touch an out-of-scope table from a branch (tested).
-5. 10 external users run it on their own models and come back with feedback.
-
----
-
-## 8. After 0.1 (not commitments)
-
-- `reble catalog serve` — REST catalog proxy → Trino/Spark/Snowflake branch access,
-  and the "branch your existing lakehouse, no migration" wedge
-- Single-file binary distribution (PyApp)
-- Hosted branch/catalog service (the commercial layer, if adoption proves out)
+Pinned versions: `pyiceberg==0.11.1`, `sqlmesh==0.236.1`, `duckdb==1.5.5`. Two of the
+APIs relied on are not formally public surface; the spikes double as upgrade
+regression tests.
