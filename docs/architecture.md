@@ -75,6 +75,22 @@ model-level change detection and virtual promotion *within* its managed models; 
 adds the physical layer underneath — branched refs, pinned upstreams, and coverage of
 tables SQLMesh doesn't manage (raw/source tables, external writers).
 
+**Concurrency & team workflow.** Multiple engineers work on branches simultaneously
+(independent refs; requires the shared team-mode catalog — local SQLite is
+single-user) and promote sequentially:
+
+1. **Promotes are serialized** (promote lock / merge-queue semantics; maps 1:1 onto
+   PRs merging one at a time in CI).
+2. **Disjoint scopes:** after someone else promotes, your branch's promote runs a
+   **lineage-aware staleness check** — if none of your models read the tables that
+   advanced, fast-forward proceeds; if they do, promote requires a rebase.
+3. **Overlapping scopes:** the clean/dirty check fails (your table's main ref moved)
+   → fast-forward refused, rebase mandatory. Warn at branch *creation* when a table
+   in scope is already branched by someone else.
+4. **`reble branch rebase`** is a first-class command: re-pin upstreams to current
+   main, rerun changed models (cheap via SQLMesh change detection), re-validate.
+   Rebase-then-promote is the only path forward for a stale branch — never data merge.
+
 ---
 
 ## 3. Architecture
@@ -148,16 +164,25 @@ drops their refs, and releases pins. The CI action deletes branches on PR close.
 ### Phase 0 — Spikes & validation (weeks 1–2)
 The plan is contingent on these. Do not scaffold the product first.
 
-- [ ] **Spike: pyiceberg branch refs.** Verify create-ref / write-to-ref /
-      fast-forward on the pyiceberg version we'd pin. Branch write support is recent;
-      confirm exactly what works. Fallback if gaps: manage refs via direct metadata
-      commits, or vendor a thin layer.
-- [ ] **Spike: DuckDB reading pinned snapshots.** Confirm the iceberg extension (or
-      pyiceberg scan → Arrow → DuckDB registration) can read a specific snapshot ID
-      per table with acceptable performance on ~10GB data.
-- [ ] **Spike: SQLMesh embedding.** Drive plan/apply programmatically via SQLMesh's
-      Python API with a custom execution path (DuckDB compute → pyiceberg commit).
-      Identify what SQLMesh's DuckDB gateway gives us vs. what we replace.
+- [x] **Spike: pyiceberg branch refs. ✅ GREEN (2026-08-30).** All operations work on
+      pyiceberg 0.11.1: create_branch, `append(branch=...)`, bidirectional isolation,
+      pinned snapshot reads, promote via `set_current_snapshot(ref_name=...)`,
+      remove_branch, DuckDB reads via Arrow. See
+      `spikes/01-pyiceberg-branches/RESULTS.md`. Note: no native fast-forward — the
+      clean/dirty promote check is ours to implement (as planned).
+- [x] **Spike: compute-path performance. ✅ GREEN (2026-08-30, scaled).** At 20M
+      rows/~1.5GB on an M4 Pro: pinned full scan 0.33s, projected scan 0.03s, branch
+      create <10ms (zero-copy verified at size), full diff 0.64s, appends ~7M rows/s.
+      See `spikes/02-perf/RESULTS.md`. Finding: at 10GB the constraint is RAM, not
+      time → design rule: lineage-driven projection pushdown on every scan; diff on
+      key+compared columns only. Re-run at full 10GB in CI before freezing N3
+      (host disk was 99% full; scaled run only).
+- [x] **Spike: SQLMesh embedding. ✅ GREEN (2026-08-30).** sqlmesh 0.236.1 drives
+      fully from Python: `Context.plan(auto_apply, no_prompts)`, programmatic dev
+      environments, `lineage()` column graphs, plan-native change detection, and
+      Arrow hand-off to pyiceberg branch commits verified end-to-end. See
+      `spikes/03-sqlmesh-embedding/RESULTS.md`. Write path confirmed: DuckDB
+      computes → Arrow → pyiceberg commits; no engine-adapter surgery needed.
 - [ ] **Validation: 15–20 interviews** with data engineers. Script: "How do you test
       pipeline changes today? What breaks? Would branch-per-PR with row-level diffs
       change your workflow?" Kill or reshape the project on this evidence.
@@ -184,6 +209,12 @@ The plan is contingent on these. Do not scaffold the product first.
 - [ ] `reble diff`: per branched table — schema diff, row counts, row-level
       added/removed/changed (DuckDB anti-joins over branch ref vs main ref; Iceberg
       changelog scan where available)
+- [ ] **New-model mode:** a table with no main counterpart gets a *profile* instead
+      of a diff — schema, row count, null rates, sample stats, upstream lineage.
+      Modified models get diff + downstream impact; new models get profile + upstream
+      deps. Both flow through the same CI comment (this is the audit step of WAP for
+      greenfield work — pinned inputs + branch isolation matter here even though
+      nothing is "changed").
 - [ ] `reble promote`: fast-forward when clean, re-apply plan otherwise; release pins
 - [ ] `reble gc`: TTL expiry, ref cleanup, pin release
 
@@ -203,7 +234,7 @@ The plan is contingent on these. Do not scaffold the product first.
 |---|---|---|
 | pyiceberg branch-ref writes immature | Medium | Week-1 spike; fallback to direct metadata commits; pin versions hard |
 | DuckDB↔Iceberg read path too slow on pinned snapshots | Medium | Spike with 10GB; fallback: pyiceberg scan → Arrow → DuckDB |
-| SQLMesh internals shift under us (fast-moving project) | Medium | Pin version; integrate via public Python API only; talk to Tobiko early — we're distribution for them, not competition |
+| SQLMesh internals shift under us (fast-moving project) | Medium | Pin version; integrate via public Python API only. Governance risk is low since the March 2026 Linux Foundation donation (open community model, no single-vendor rug-pull). Upstream a change only if the public API can't support the branch integration |
 | Pins block snapshot expiry → prod storage bloat | High if ignored | TTLs + `reble gc` in v1, CI auto-cleanup |
 | Prod write from branch context | Low, catastrophic | Hard write guards + tests before any other feature |
 | Interviews say SQLMesh envs already suffice | Real | That's why interviews are in Phase 0, before the build |
