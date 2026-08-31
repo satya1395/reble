@@ -76,3 +76,12 @@ def test_overlap_warning(eng):
     eng.create("a", ["demo.orders"])
     m = eng.create("b", ["demo.orders"])
     assert ("a", "demo.orders") in m.overlaps
+
+
+def test_fresh_clone_creates_warehouse_dir(tmp_path):
+    """Regression: warehouse/ is gitignored, so fresh clones lack it — the
+    engine must create the local warehouse dir itself (found live in CI)."""
+    cfg = RebleConfig(project_dir=tmp_path)          # no warehouse dir exists
+    e = BranchEngine(cfg)
+    e.write("demo.x", t(0, 1))
+    assert (tmp_path / "warehouse" / "catalog.db").exists()

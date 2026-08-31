@@ -37,6 +37,8 @@ def _quiet_overwrite():
 
 
 def open_catalog(cfg: RebleConfig) -> Catalog:
+    if "://" not in cfg.warehouse:      # local mode: a fresh clone has no
+        (cfg.project_dir / cfg.warehouse).mkdir(parents=True, exist_ok=True)
     return load_catalog(
         "reble",
         type="sql",
