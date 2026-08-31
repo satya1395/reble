@@ -9,10 +9,7 @@ from reble.errors import BranchError
 from reble.runner import run
 from reble.scaffold import scaffold
 
-CLEAN = """\
-MODEL (name demo.orders_clean, kind FULL);
-SELECT id, amount FROM raw.orders WHERE amount > 0
-"""
+CLEAN = "SELECT id, amount FROM raw.orders WHERE amount > 0\n"
 
 
 def t(ids, amounts):
@@ -28,9 +25,9 @@ def rows(eng, table, snap=None):
 def project(tmp_path):
     scaffold(tmp_path / "p")
     p = tmp_path / "p"
-    for f in (p / "models").glob("*.sql"):
+    for f in (p / "models" / "demo").glob("*.sql"):
         f.unlink()
-    (p / "models" / "orders_clean.sql").write_text(CLEAN)
+    (p / "models" / "demo" / "orders_clean.sql").write_text(CLEAN)
     cfg = load_config(p)
     eng = BranchEngine(cfg)
     eng.write("raw.orders", t([1, 2], [10.0, -5.0]))
@@ -49,7 +46,7 @@ def test_branch_first_lazy_scope_and_epoch(project):
     eng.switch("first")
 
     # now edit and run — scope grows, inputs resolve as of the EPOCH
-    (cfg.project_dir / "models" / "orders_clean.sql").write_text(
+    (cfg.project_dir / "models" / "demo" / "orders_clean.sql").write_text(
         CLEAN.replace("> 0", ">= -100"))
     res = run(cfg, eng)
     assert res.guard_skipped == []

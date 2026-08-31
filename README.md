@@ -22,11 +22,11 @@ disk while you're trying it out), and compute is a single fast node — your mac
 or a CI runner.
 
 > ⚠️ **Status: pre-alpha, but real.** The full loop works today — `init → run →
-> branch → run → diff → promote`, both git orders, with 25 passing tests — from
-> source install only (no PyPI release yet). One migration in flight: the current
-> source still embeds SQLMesh as the runner; the SQLGlot-direct core described here
-> is [validated](spikes/04-sqlglot-direct/RESULTS.md) and replacing it. Feedback is
-> the most valuable contribution — open a Discussion.
+> branch → run → diff → promote`, both git orders, with 40 passing tests — from
+> source install only — `pip install reble`. The engine is the
+> [spike-validated](spikes/04-sqlglot-direct/RESULTS.md) SQLGlot-direct core:
+> models are plain SQL files, exactly as described below. Feedback is the most
+> valuable contribution — open a Discussion.
 
 **→ [Why Reble exists](docs/why.md)** — the full story: the four gaps in data
 engineering workflows, why existing tools don't close them, and why now.

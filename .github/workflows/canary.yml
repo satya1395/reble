@@ -26,7 +26,7 @@ jobs:
       - name: Install reble with LATEST critical deps (pins ignored)
         run: |
           pip install --no-deps -e .
-          pip install --upgrade pyiceberg[sql-sqlite,pyarrow] pyarrow duckdb sqlglot sqlmesh click pyyaml pytest
-          pip list | grep -iE "pyiceberg|duckdb|pyarrow|sqlglot|sqlmesh"
+          pip install --upgrade pyiceberg[sql-sqlite,pyarrow] pyarrow duckdb sqlglot click pyyaml pytest
+          pip list | grep -iE "pyiceberg|duckdb|pyarrow|sqlglot"
       - name: API contract + full suite against latest
         run: pytest tests/ -q --deselect tests/test_api_contract.py::TestVersionSet

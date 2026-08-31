@@ -37,10 +37,10 @@ def init(name: str):
     except RebleError as e:
         _fail(e)
     click.echo(f"Initialized reble project in {path}/")
-    click.echo("  reble.yml          project config")
-    click.echo("  config.yaml        SQLMesh config")
-    click.echo("  models/example.sql starter model")
-    click.echo(f"\nNext: cd {name} && reble branch list")
+    click.echo("  reble.yml                    project config")
+    click.echo("  models/demo/example.sql      a model is just a SQL file")
+    click.echo("  models/demo/example_summary.sql")
+    click.echo(f"\nNext: cd {name} && reble run")
 
 
 @cli.command()
@@ -66,19 +66,20 @@ def status():
 
 
 @cli.command()
-def run():
-    """Run models on the current branch (SQLMesh plan/apply + publish to Iceberg)."""
+@click.option("--force", is_flag=True,
+              help="Rerun every model regardless of change detection "
+                   "(e.g. to refresh outputs after new raw data arrived)")
+def run(force: bool):
+    """Run changed models on the current branch, publish to Iceberg."""
     from reble.config import load_config
     from reble.runner import run as _run
     try:
         cfg = load_config()
         from reble.branches import BranchEngine
-        res = _run(cfg, BranchEngine(cfg))
+        res = _run(cfg, BranchEngine(cfg), force=force)
     except RebleError as e:
         _fail(e)
-    click.echo(f"Environment: {res.environment}")
-    if res.mirrored:
-        click.echo(f"  mirrored inputs : {', '.join(res.mirrored)}")
+    click.echo(f"Context: {res.environment}")
     click.echo(f"  models changed  : {', '.join(res.changed) or '(none)'}")
     click.echo(f"  published       : {', '.join(res.published) or '(none)'}")
     for tbl in res.guard_skipped:
@@ -181,7 +182,8 @@ def branch_create(name: str, tables: str | None, pin_all: bool):
     downstream cascade, and their upstream inputs become the pins.
     """
     from reble.config import load_config
-    from reble.runner import analyze_project, upstream_closure
+    from reble.models import upstream_closure
+    from reble.runner import analyze_project
     try:
         cfg = load_config()
         eng = _engine()
@@ -189,7 +191,7 @@ def branch_create(name: str, tables: str | None, pin_all: bool):
         if tables:
             scope = [t.strip() for t in tables.split(",") if t.strip()]
         else:
-            scope, deps = analyze_project(cfg)
+            scope, models = analyze_project(cfg, eng)
             inferred = True
             if not scope:
                 # branch-first, git-style: open scope + frozen epoch
@@ -205,8 +207,8 @@ def branch_create(name: str, tables: str | None, pin_all: bool):
         pin_tables = None
         if not pin_all:
             if not inferred:
-                _, deps = analyze_project(cfg)
-            pin_tables = upstream_closure(scope, deps)   # None if uninferrable
+                _, models = analyze_project(cfg, eng)
+            pin_tables = upstream_closure(scope, models)  # None if uninferrable
         m = eng.create(name, scope, pin_tables=pin_tables)
     except RebleError as e:
         _fail(e)

@@ -8,10 +8,6 @@ warehouse — with a zero-services all-local mode as the on-ramp.
 **Models are plain SQL files** (filename = table name); dependencies, lineage, and
 change detection are inferred from the SQL itself.
 
-> **Engine migration note:** the shipped source still embeds SQLMesh as the runner;
-> the SQLGlot-direct core described in this document is validated
-> ([spike 4](../spikes/04-sqlglot-direct/RESULTS.md)) and replacing it.
-
 For the motivation and positioning, see [why.md](why.md). For proof the primitives
 work at target scale, see the reproducible [spikes](../spikes/).
 
@@ -252,6 +248,6 @@ scripts in [`spikes/`](../spikes/):
 | [03 — SQLMesh embedding](../spikes/03-sqlmesh-embedding/RESULTS.md) | *(historical — superseded by spike 4)* headless plan/apply, env-per-branch | ✅ |
 | [04 — SQLGlot-direct core](../spikes/04-sqlglot-direct/RESULTS.md) | deps (CTE-safe), topo order, column lineage, cosmetic-vs-semantic fingerprints with upstream cascade, ~20-line runner over Iceberg-backed views onto branch refs | ✅ |
 
-Pinned versions: `pyiceberg==0.11.1`, `sqlglot==30.8.0`, `duckdb==1.5.5` (the
-`sqlmesh` pin remains only until the runner migration lands). The spikes double as
-upgrade regression tests.
+Pinned versions: `pyiceberg==0.11.1`, `sqlglot==30.8.0`, `duckdb==1.5.5` —
+managed as a certified set (`requirements-lock.txt`, API-contract tests, weekly
+canary against latest). The spikes double as upgrade regression tests.

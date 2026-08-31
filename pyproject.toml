@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reble"
-version = "0.0.1"
+version = "0.0.2"
 description = "Your models are just SQL files. Branch your warehouse like you branch your code — local-first analytics on DuckDB + Iceberg + SQLGlot."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -23,7 +23,7 @@ dependencies = [
     "pyiceberg[sql-sqlite,pyarrow]==0.11.1",
     "pyarrow==25.0.1",
     "duckdb==1.5.5",
-    "sqlmesh==0.236.1",
+    "sqlglot==30.8.0",
     "click>=8.1",
     "pyyaml>=6.0",
 ]

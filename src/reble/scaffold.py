@@ -10,37 +10,22 @@ warehouse: warehouse          # local dir, or s3://bucket/prefix for team mode
 catalog_uri: ""               # empty = sqlite catalog inside the warehouse (local mode)
                               # team mode: postgresql://... or an Iceberg REST catalog uri
 default_branch_ttl_days: 14
-"""
 
-_SQLMESH_CONFIG = """\
-gateways:
-  local:
-    connection:
-      type: duckdb
-      database: .reble/db.db
-
-default_gateway: local
-
-model_defaults:
-  dialect: duckdb
-  start: 2026-01-01
+# Per-model config lives here too — only for models that need something
+# non-default (a model with no entry is a FULL rebuild, always):
+# models:
+#   demo.events:
+#     kind: incremental        # v0.2
+#     time_column: event_ts
 """
 
 _EXAMPLE_MODEL = """\
-MODEL (
-  name demo.example,
-  kind FULL
-);
-
+-- models/demo/example.sql defines the table demo.example. That's the whole
+-- format: filename = table name, dependencies read from the SQL itself.
 SELECT 1 AS id, 'hello reble' AS message
 """
 
 _EXAMPLE_SUMMARY = """\
-MODEL (
-  name demo.example_summary,
-  kind FULL
-);
-
 SELECT COUNT(*) AS n, MAX(message) AS last_message
 FROM demo.example
 """
@@ -54,13 +39,12 @@ warehouse/
 def scaffold(target: Path) -> Path:
     if (target / "reble.yml").exists():
         raise ProjectError(f"{target} is already a reble project")
-    (target / "models").mkdir(parents=True, exist_ok=True)
+    (target / "models" / "demo").mkdir(parents=True, exist_ok=True)
     (target / "warehouse").mkdir(exist_ok=True)
     (target / ".reble").mkdir(exist_ok=True)
     (target / "reble.yml").write_text(_REBLE_YML)
-    (target / "config.yaml").write_text(_SQLMESH_CONFIG)
-    (target / "models" / "example.sql").write_text(_EXAMPLE_MODEL)
-    (target / "models" / "example_summary.sql").write_text(_EXAMPLE_SUMMARY)
+    (target / "models" / "demo" / "example.sql").write_text(_EXAMPLE_MODEL)
+    (target / "models" / "demo" / "example_summary.sql").write_text(_EXAMPLE_SUMMARY)
     gi = target / ".gitignore"
     if not gi.exists():
         gi.write_text(_GITIGNORE)
