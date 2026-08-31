@@ -90,6 +90,15 @@ class StateStore:
         return [m for r in self._db.execute("SELECT name FROM branches ORDER BY created_at")
                 if (m := self.get(r[0]))]
 
+    def update_base(self, name: str, table: str, snapshot_id: int) -> None:
+        m = self.get(name)
+        if m is None:
+            raise BranchError(f"branch {name!r} does not exist")
+        m.base[table] = snapshot_id
+        self._db.execute("UPDATE branches SET base = ? WHERE name = ?",
+                         (json.dumps(m.base), name))
+        self._db.commit()
+
     def remove(self, name: str) -> None:
         if self.current_branch() == name:
             self.set_current(MAIN)

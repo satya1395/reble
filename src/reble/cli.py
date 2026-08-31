@@ -85,6 +85,59 @@ def run():
         )
 
 
+@cli.command()
+def diff():
+    """Show what the current branch changes, per scoped table."""
+    from reble.diffing import diff_branch
+    try:
+        eng = _engine()
+        diffs = diff_branch(eng)
+        branch_name = eng.state.current_branch()
+    except RebleError as e:
+        _fail(e)
+    if not diffs:
+        click.echo("No written tables on this branch yet — run `reble run` first.")
+        return
+    click.echo(f"Branch {click.style(branch_name, bold=True)} vs base:\n")
+    for d in diffs:
+        if d.kind == "profile":
+            click.secho(f"  {d.table}  (new table — profile)", bold=True)
+            click.echo(f"    rows: {d.rows_branch:,}")
+            for name, typ, nulls in d.profile_columns:
+                nul = f", {nulls:,} nulls" if nulls else ""
+                click.echo(f"    {name}: {typ}{nul}")
+        else:
+            click.secho(f"  {d.table}", bold=True)
+            for c in d.schema_added:
+                click.secho(f"    schema: + column {c}", fg="green")
+            for c in d.schema_removed:
+                click.secho(f"    schema: - column {c}", fg="red")
+            click.echo(f"    rows: {d.rows_main:,} -> {d.rows_branch:,}")
+            changed = "n/a (no id column)" if d.changed is None else f"{d.changed:,}"
+            click.echo(f"    +{d.added:,} added   -{d.removed:,} removed   "
+                       f"~{changed} changed")
+        click.echo()
+
+
+@cli.command()
+def promote():
+    """Fast-forward main to this branch's results and delete the branch."""
+    try:
+        res = _engine().promote()
+    except RebleError as e:
+        _fail(e)
+    click.echo(f"Promoted branch {click.style(res['branch'], bold=True)} to main:")
+    for t in res["promoted"]:
+        click.echo(f"  {t}")
+    if not res["promoted"]:
+        click.echo("  (no written tables — branch deleted)")
+    for t in res["stale_pins"]:
+        click.secho(
+            f"  note: pinned input {t} advanced on main while you worked — "
+            "your results were computed from the older snapshot.", fg="yellow")
+    click.echo("Back on main")
+
+
 @cli.group()
 def branch():
     """Create, list, switch, and delete warehouse branches."""

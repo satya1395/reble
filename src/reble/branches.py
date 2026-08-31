@@ -120,6 +120,63 @@ class BranchEngine:
         cur = self.state.current_branch()
         return None if cur == MAIN else self.state.get(cur)
 
+    def promote(self) -> dict:
+        """Promote the current branch to main: fast-forward each scoped table's
+        main ref to the branch ref, then delete the branch.
+
+        Refuses (whole branch, atomically — no partial promotes) when any scoped
+        table's main advanced since branching: that's the dirty case, and the
+        remedy is rerunning on main, never a data merge. Also reports pinned
+        tables whose main advanced (stale inputs — the lineage-aware version of
+        this check is future work; for now it's a warning).
+        """
+        m = self.current()
+        if m is None:
+            raise BranchError("on main — nothing to promote")
+
+        # check everything before touching anything
+        to_promote: list[tuple[str, int]] = []       # (table, branch snapshot)
+        dirty: list[str] = []
+        for t in m.scope:
+            try:
+                tbl = self.catalog.load_table(t)
+            except NoSuchTableError:
+                continue                              # scoped, never written
+            ref = tbl.metadata.refs.get(m.name)
+            if ref is None:
+                continue                              # scoped, never written
+            cur = tbl.current_snapshot()
+            base = m.base.get(t)
+            if base is not None and cur is not None and cur.snapshot_id != base:
+                dirty.append(t)
+            else:
+                to_promote.append((t, ref.snapshot_id))
+        if dirty:
+            raise BranchError(
+                f"cannot fast-forward: main advanced since branching for {dirty}. "
+                "Switch to main and rerun the models there (reble branch rebase "
+                "is coming); no data merge will ever happen."
+            )
+
+        stale_pins = [
+            t for t, pinned in m.pins.items()
+            if (s := self._snapshot_id(t)) is not None and s != pinned
+        ]
+
+        promoted = []
+        for t, branch_snap in to_promote:
+            tbl = self.catalog.load_table(t)
+            tbl.manage_snapshots().set_current_snapshot(
+                snapshot_id=branch_snap).commit()
+            tbl = self.catalog.load_table(t)
+            if m.name in tbl.metadata.refs:
+                tbl.manage_snapshots().remove_branch(m.name).commit()
+            promoted.append(t)
+
+        name = m.name
+        self.state.remove(name)                       # also resets current to main
+        return {"branch": name, "promoted": promoted, "stale_pins": stale_pins}
+
     # -- resolution ------------------------------------------------------------
     def resolve_read(self, table: str) -> int | None:
         """Snapshot id a read of `table` should use on the current branch.
@@ -174,6 +231,7 @@ class BranchEngine:
                 tbl = self.catalog.load_table(table)
                 snap = tbl.current_snapshot()
             tbl.manage_snapshots().create_branch(snap.snapshot_id, m.name).commit()
+            self.state.update_base(m.name, table, snap.snapshot_id)
             tbl = self.catalog.load_table(table)
         if mode == "overwrite":
             with _quiet_overwrite():
