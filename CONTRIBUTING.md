@@ -38,6 +38,15 @@ description. Style and tooling details will be documented when `src/` exists.
 Be respectful and constructive. We're building a tool whose entire premise is making
 it safe to try things — the community should feel the same way.
 
-## License
+## License and CLA
 
-Contributions are accepted under Apache 2.0 (see [LICENSE](LICENSE)).
+The Project is Apache 2.0 (see [LICENSE](LICENSE)) — and the CLI stays that way.
+
+Code contributions require a one-time signature of the
+[Contributor License Agreement](CLA.md) (a bot will prompt on your first pull
+request; it takes about thirty seconds). Being straight about why it exists:
+Reble's open-source CLI is permanent, but the project reserves the option of a
+commercially licensed *hosted service* someday. The CLA lets that happen without
+chasing permissions from every past contributor — your code stays Apache 2.0 for
+everyone, forever, regardless. Design feedback, issues, and discussions need no
+CLA — only merged code does.
