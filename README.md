@@ -16,7 +16,7 @@ scale, or pay for.
 SELECT id, amount FROM raw.orders WHERE amount > 0
 ```
 
-![The reble loop in 20 seconds: branch create with inferred scope, run, row-level diff, query on the branch, promote](docs/assets/demo.gif)
+![The reble loop in 30 seconds: a one-line metric fix on a 1.2M-row warehouse — branch create with inferred scope, run, row-level diff, query on the branch, promote](docs/assets/demo.gif)
 
 <sub>Prefer stills? The full [CLI output design](docs/assets/cli-design.png) shows every command's output on one page ([HTML source](docs/assets/cli-design.html)).</sub>
 
@@ -37,8 +37,8 @@ embedded in the CLI, so your laptop and your CI runners *are* the compute — fo
 exactly as long as a run takes, and never a second of billing after.
 
 > ⚠️ **Status: pre-alpha, but real.** The full loop works today — `init → run →
-> branch → run → diff → promote`, both git orders, with 40 passing tests — from
-> source install only — `pip install reble`. The engine is the
+> branch → run → diff → promote`, both git orders, with 45 passing tests —
+> `pip install reble` and go. The engine is the
 > [spike-validated](spikes/04-sqlglot-direct/RESULTS.md) SQLGlot-direct core:
 > models are plain SQL files, exactly as described below. Feedback is the most
 > valuable contribution — open a Discussion.
@@ -92,12 +92,12 @@ The same loop, in scenarios every data engineer has lived through. All CLI outpu
 below is the real tool's output format. The example warehouse:
 
 ```
-raw.orders            ← ingested hourly by Airbyte
-raw.customers         ← ingested nightly
-stg_orders            ← staging model
-stg_customers         ← staging model
-fct_revenue_daily     ← the table finance actually looks at
-mart_exec_dashboard   ← reads fct_revenue_daily
+raw.orders                 ← ingested hourly by Airbyte
+raw.customers              ← ingested nightly
+core.stg_orders            ← staging model
+core.stg_customers         ← staging model
+core.fct_revenue_daily     ← the table finance actually looks at
+core.mart_exec_dashboard   ← reads fct_revenue_daily
 ```
 
 ### 1. "Finance says revenue is wrong" — changing a metric definition
@@ -117,36 +117,34 @@ gitGraph
 ```
 
 ```console
-$ vim models/stg_orders.sql        # ... WHERE status != 'cancelled'
+$ vim models/core/stg_orders.sql   # ... WHERE status != 'cancelled'
 
 $ reble branch create fix-cancelled-revenue
-Created branch fix-cancelled-revenue
-  scope (inferred from your changes): stg_orders, fct_revenue_daily, mart_exec_dashboard
-  pins  (2): raw.customers, raw.orders
-Switched to fix-cancelled-revenue
+⎇ main → fix-cancelled-revenue
+  scope  core.stg_orders, core.fct_revenue_daily, core.mart_exec_dashboard  inferred from your changes
+  pins   raw.orders  upstream inputs, frozen now
+✓ switched to fix-cancelled-revenue
 ```
 
 Notice what you didn't do: enumerate the downstream cascade. Reble read it off the
-model graph — your one-line edit touches three tables, and the two raw inputs are
-pinned so hourly ingestion can't shift your numbers mid-analysis.
+model graph — your one-line edit touches three tables, and the raw input feeding
+them is pinned so hourly ingestion can't shift your numbers mid-analysis.
 
 ```console
 $ reble run
-Environment: fix_cancelled_revenue
-  mirrored inputs : raw.customers, raw.orders
-  models changed  : stg_orders, fct_revenue_daily, mart_exec_dashboard
-  published       : stg_orders, fct_revenue_daily, mart_exec_dashboard
+⎇ fix-cancelled-revenue
+  changed    core.stg_orders, core.fct_revenue_daily, core.mart_exec_dashboard
+  published  core.stg_orders, core.fct_revenue_daily, core.mart_exec_dashboard → branch ref
+✓ 3 models in 0.4s
 
 $ reble diff
-Branch fix-cancelled-revenue vs base:
+⎇ fix-cancelled-revenue vs base
 
-  stg_orders
-    rows: 1,204,331 -> 1,168,210
-    +0 added   -36,121 removed   ~0 changed
+  core.stg_orders  1,204,331 → 1,168,210 rows · key order_id
+    −36,121 removed
 
-  fct_revenue_daily
-    rows: 730 -> 730
-    +0 added   -0 removed   ~214 changed
+  core.fct_revenue_daily  730 → 730 rows · key date_id
+    ~214 changed
 ```
 
 There's finance's answer, before anything touched prod: **36,121 cancelled orders
@@ -155,11 +153,11 @@ sign-off, then:
 
 ```console
 $ reble promote
-Promoted branch fix-cancelled-revenue to main:
-  stg_orders
-  fct_revenue_daily
-  mart_exec_dashboard
-Back on main
+⎇ fix-cancelled-revenue → main
+  ✓ core.stg_orders
+  ✓ core.fct_revenue_daily
+  ✓ core.mart_exec_dashboard
+✓ promoted · branch deleted · on main
 ```
 
 **Without branches:** you'd have run this in a shared dev schema (numbers drifting
@@ -176,10 +174,10 @@ Branch first, git-style, *before* writing any SQL:
 
 ```console
 $ reble branch create weekly-retention
-Created branch weekly-retention (branch-first: no changes yet)
-  scope: open — grows automatically when you edit models and `reble run`
-  reads: every table frozen as of this moment (the branch epoch)
-Switched to weekly-retention
+⎇ main → weekly-retention
+  scope  open — grows when you edit models and run
+  reads  every table frozen as of now (the branch epoch)
+✓ switched to weekly-retention
 ```
 
 Now iterate. Twenty runs over three days while prod ingests hourly — every run
@@ -187,24 +185,21 @@ computes against the same Tuesday-9am inputs, so when the retention curve change
 it's because *your SQL* changed:
 
 ```console
-$ vim models/mart_weekly_retention.sql
+$ vim models/core/mart_weekly_retention.sql
 $ reble run
-Environment: weekly_retention
-  models changed  : mart_weekly_retention
-  published       : mart_weekly_retention
+⎇ weekly-retention
+  changed    core.mart_weekly_retention
+  published  core.mart_weekly_retention → branch ref
+✓ 1 model in 0.3s
 
 $ reble diff
-Branch weekly-retention vs base:
+⎇ weekly-retention vs base
 
-  mart_weekly_retention  (new table — profile)
-    rows: 52
-    cohort_week: date
-    customers: int64
-    retained_w1: double
-    retained_w4: double, 3 nulls
+  core.mart_weekly_retention  new table — profile
+    rows 53   cols cohort_week timestamp · customers int64 · retained_w1 double · retained_w4 double 5 nulls
 ```
 
-A profile, not a diff — there's no "before" for a new table. Those 3 nulls in
+A profile, not a diff — there's no "before" for a new table. Those 5 nulls in
 `retained_w4`? Caught here, not in the exec's dashboard. When it's right, `reble
 promote` — and the moment it lands, the new mart is registered in the lineage graph,
 so the *next* person who touches `stg_customers` gets warned that your mart reads it.
@@ -240,9 +235,11 @@ The overlap case is caught even earlier — at *creation*:
 
 ```console
 $ reble branch create also-touching-orders
-  ...
-  warning: stg_orders is also scoped by branch 'priya/fix-dedup' —
-  second promote will require a rebase
+⎇ main → also-touching-orders
+  scope  core.stg_orders, core.fct_revenue_daily  inferred from your changes
+  pins   raw.orders  upstream inputs, frozen now
+⚠ core.stg_orders is also scoped by branch priya/fix-dedup — second promote will require a rebase
+✓ switched to also-touching-orders
 ```
 
 **Without branches:** Priya and Marco share a dev schema, clobber each other's
@@ -257,19 +254,22 @@ would have approved it.
 $ reble branch create simplify-join
 $ reble run
 $ reble diff
-Branch simplify-join vs base:
+⎇ simplify-join vs base
 
-  stg_orders
-    rows: 1,204,331 -> 1,983,507
-    +779,176 added   -0 removed   ~0 changed
+  core.stg_orders  1,168,210 → 1,919,630 rows
+    +751,420 added   no unique key: changes count as +/− pairs
+
+  core.fct_revenue_daily  730 → 730 rows · key date_id
+    ~730 changed
 ```
 
-**A 65% row explosion.** The "simplified" join fans out on duplicate customer keys.
-Caught on a laptop, on frozen inputs, in a branch nobody else can see:
+**A 64% row explosion — and revenue restated on all 730 days.** The "simplified"
+join fans out on duplicate customer keys. Caught on a laptop, on frozen inputs, in
+a branch nobody else can see:
 
 ```console
 $ reble branch delete simplify-join
-Deleted branch simplify-join
+✓ deleted branch simplify-join
 ```
 
 Nothing to roll back, nothing to explain in the incident channel, no backfill. The
@@ -387,7 +387,7 @@ catalog:
 - [jaffle shop on Reble](https://github.com/satya1395/jaffle-shop-classic) — dbt's example ported, live branch-per-PR, dbt→reble FAQ
 - [Architecture](docs/architecture.md)
 - [Getting started](docs/getting-started.md)
-- [CLI output design](docs/assets/cli-design.png) — every command's output, one page (the v0.1 formatting target)
+- [CLI output design](docs/assets/cli-design.png) — every command's output, one page (implemented in v0.0.9)
 - [Validated spikes](spikes/) — reproducible proof the core primitives work today
 
 ## Contributing

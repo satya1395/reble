@@ -111,7 +111,7 @@ def test_cli_load_csv(tmp_path):
     try:
         out = r.invoke(reble_cli, ["load", "raw.orders", "seeds/orders.csv"])
         assert out.exit_code == 0, out.output
-        assert "Loaded 2 rows into raw.orders" in out.output
+        assert "2 rows" in out.output and "raw.orders" in out.output
         out2 = r.invoke(reble_cli, ["load", "raw.orders", "seeds/orders.csv",
                                     "--overwrite"])
         assert out2.exit_code == 0, out2.output
