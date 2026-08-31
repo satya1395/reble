@@ -1,5 +1,10 @@
 # Reble
 
+[![tests](https://github.com/satya1395/reble/actions/workflows/tests.yml/badge.svg)](https://github.com/satya1395/reble/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/reble)](https://pypi.org/project/reble/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![CLA assistant](https://cla-assistant.io/readme/badge/satya1395/reble)](https://cla-assistant.io/satya1395/reble)
+
 **Your models are just SQL files. Branch your warehouse like you branch your code.**
 
 ```sql
