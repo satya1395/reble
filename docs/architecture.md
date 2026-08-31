@@ -100,7 +100,7 @@ branch "pr-123":
    fast-forward `main` to the branch ref (cheap, atomic per table).
 2. Otherwise → re-apply against main (rerun the changed models there).
    No data-level merge, ever. Last-write-wins data merges silently corrupt warehouses;
-   we refuse to build that. Branches are ephemeral: create, test, promote or discard.
+   Reble refuses to build that. Branches are ephemeral: create, test, promote or discard.
 
 **Two workflows, one loop.** Modified models get a **diff** (schema, row-level
 added/removed/changed) plus column-lineage-derived downstream impact. A **new** model

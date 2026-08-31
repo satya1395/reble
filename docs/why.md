@@ -61,7 +61,7 @@ work. A branch is pure metadata: branching a 10GB table costs nothing until you 
 There is deliberately **no merge**. Branches are ephemeral: create, test, then
 *promote* (fast-forward the refs when prod hasn't moved; rerun on main when it has)
 or discard. Data-level merges with conflict resolution silently corrupt warehouses —
-we refuse to build one.
+Reble refuses to build one.
 
 On top of that primitive, the killer workflow: **branch-per-PR CI**. Open a pull
 request and a GitHub Action creates a scoped branch, runs only the changed models,
@@ -108,16 +108,19 @@ neither Slim CI nor manual clone discipline gives you structurally.
 
 ## What Reble is not
 
-- **Not a query engine, storage engine, or table format.** We compose DuckDB,
-  Iceberg, and SQLGlot, and add the branch layer and glue.
-- **Not a Snowflake competitor.** The target is small teams — one fast node over
-  data in your bucket, correct and pleasant at tens of gigabytes, not petabytes on
-  a cluster.
+- **Not a query engine, storage engine, or table format.** Reble composes DuckDB,
+  Iceberg, and SQLGlot, and adds the branch layer and glue.
+- **Not a Snowflake competitor — a different question entirely.** Reble doesn't
+  compete with Snowflake the product; it competes for the workloads that never
+  needed it. For a small team, the honest question isn't *"which warehouse?"* but
+  *"do you need a warehouse vendor at all?"* One fast node over data in your
+  bucket — correct and pleasant at tens of gigabytes, not petabytes on a cluster.
 - **Not a data merge tool.** Promote or discard. Never merge.
 - **Not a migration.** Subset branches work over standard Iceberg catalogs — the
   long-term goal is branching *your existing* lakehouse, not moving it.
 
 ## The one-sentence version
 
-> Reble is the `git init` of lakehouses: one tool, zero services, and every pipeline
-> change — new or modified — gets its own cheap, isolated, reviewable branch.
+> Reble is an experiment tinkering on one idea: that a warehouse should branch like
+> a codebase. One tool, your bucket, and every pipeline change — new or modified —
+> gets its own cheap, isolated, reviewable branch.

@@ -64,7 +64,7 @@ resolve as of the moment you branched).
   only changed models run (cosmetic edits don't count — hashing is on the canonical
   AST), and downstream impact is shown before you apply.
 - **No merge, ever** — branches are ephemeral: create, test, promote (fast-forward or
-  re-run) or discard. We refuse to build last-write-wins data merges.
+  re-run) or discard. Reble refuses to build last-write-wins data merges.
 
 ---
 
@@ -334,8 +334,10 @@ catalog:
   and SQLGlot and adds the branching layer and glue.
 - Not a dbt/SQLMesh replacement you must migrate to all at once — importers
   (`{{ ref('...') }}` and `MODEL(...)` translation) are on the roadmap.
-- Not a Snowflake competitor — the target is small teams; compute is one fast node
-  (your laptop or a CI runner) over data in your bucket, not a cluster.
+- Reble doesn't compete with Snowflake the product. It competes for the workloads
+  that never needed it — for a small team, the honest question isn't *"which
+  warehouse?"* but *"do you need a warehouse vendor at all?"* Compute is one fast
+  node over data in your bucket, not a cluster.
 - Not a full-catalog branching system (see Nessie/lakeFS for that) — Reble branches
   subsets over standard Iceberg catalogs, no migration required.
 
