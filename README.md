@@ -16,6 +16,8 @@ scale, or pay for.
 SELECT id, amount FROM raw.orders WHERE amount > 0
 ```
 
+![The reble loop in 20 seconds: branch create with inferred scope, run, row-level diff, query on the branch, promote](docs/assets/demo.gif)
+
 No `MODEL(...)` headers. No Jinja `{{ ref('...') }}`. No per-model YAML. Dependencies,
 column lineage, and change detection are read from the SQL you already wrote — powered by
 [SQLGlot](https://github.com/tobymao/sqlglot), the parser underneath the ecosystem's
