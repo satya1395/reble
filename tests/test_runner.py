@@ -94,3 +94,30 @@ def test_main_run_after_branch_promote_refreshes_downstream(project):
     assert rows(eng, "demo.totals").to_pydict()["total"] == [25.0]
 
     assert run(cfg, eng).published == []                     # idempotent
+
+
+def test_cli_load_csv(tmp_path):
+    from click.testing import CliRunner
+    from reble.cli import cli as reble_cli
+    from reble.scaffold import scaffold
+    scaffold(tmp_path / "p")
+    (tmp_path / "p" / "seeds").mkdir()
+    (tmp_path / "p" / "seeds" / "orders.csv").write_text(
+        "id,amount\n1,10.5\n2,20.0\n")
+    r = CliRunner()
+    import os
+    old = os.getcwd()
+    os.chdir(tmp_path / "p")
+    try:
+        out = r.invoke(reble_cli, ["load", "raw.orders", "seeds/orders.csv"])
+        assert out.exit_code == 0, out.output
+        assert "Loaded 2 rows into raw.orders" in out.output
+        out2 = r.invoke(reble_cli, ["load", "raw.orders", "seeds/orders.csv",
+                                    "--overwrite"])
+        assert out2.exit_code == 0, out2.output
+    finally:
+        os.chdir(old)
+    from reble.branches import BranchEngine
+    from reble.config import load_config
+    eng = BranchEngine(load_config(tmp_path / "p"))
+    assert eng.catalog.load_table("raw.orders").scan().to_arrow().num_rows == 2

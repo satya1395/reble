@@ -91,6 +91,31 @@ def run(force: bool):
 
 
 @cli.command()
+@click.argument("table")
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--overwrite", is_flag=True,
+              help="Replace the table's contents instead of appending")
+def load(table: str, file: str, overwrite: bool):
+    """Load a CSV or Parquet FILE into TABLE (e.g. raw.orders seeds/orders.csv).
+
+    Writes are routed and guarded by the current branch like any other write.
+    """
+    import duckdb
+    try:
+        eng = _engine()
+        con = duckdb.connect()
+        reader = ("read_parquet" if file.endswith((".parquet", ".pq"))
+                  else "read_csv_auto")
+        arrow = con.execute(f"SELECT * FROM {reader}(?)", [file]).to_arrow_table()
+        con.close()
+        eng.write(table, arrow, mode="overwrite" if overwrite else "append")
+    except RebleError as e:
+        _fail(e)
+    click.echo(f"Loaded {arrow.num_rows:,} rows into {table} "
+               f"({'overwrite' if overwrite else 'append'})")
+
+
+@cli.command()
 def diff():
     """Show what the current branch changes, per scoped table."""
     from reble.diffing import diff_branch
@@ -122,7 +147,7 @@ def diff():
             if d.changed is not None:
                 line += f"   ~{d.changed:,} changed"
             else:
-                line += "   (no id column: changed rows count as +/- pairs)"
+                line += "   (no unique key: changed rows count as +/- pairs)"
             click.echo(line)
         click.echo()
 

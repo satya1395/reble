@@ -6,9 +6,10 @@ Two modes per table (docs/architecture.md §2, "Two workflows, one loop"):
   - profile: a table with no meaningful main counterpart (new-model workflow) —
              schema, row count, null counts
 
-Row identity: uses an `id` column when both sides have one (changed = same id,
-different values, NULL-safe); otherwise falls back to multiset EXCEPT ALL over
-common columns (added/removed only — changed shows up as +1/-1 pairs).
+Row identity: uses `id`, or any `*_id` column verified unique on both sides
+(changed = same key, different values, NULL-safe); otherwise falls back to
+multiset EXCEPT ALL over common columns (added/removed only — changed shows up
+as +1/-1 pairs).
 """
 from __future__ import annotations
 
@@ -20,7 +21,22 @@ from pyiceberg.exceptions import NoSuchTableError
 from reble.branches import BranchEngine
 from reble.errors import BranchError
 
-KEY_COLUMN = "id"
+def _pick_key(con, common: list[str]) -> str | None:
+    """`id` if present, else the first `*_id` column that is actually unique
+    on BOTH sides — never guess a key that would double-count."""
+    candidates = [c for c in common if c == "id"] + \
+        [c for c in common if c.endswith("_id")]
+    for c in candidates:
+        unique = True
+        for side in ("m", "b"):
+            n, d = con.execute(
+                f'SELECT count(*), count(DISTINCT "{c}") FROM {side}').fetchone()
+            if n != d:
+                unique = False
+                break
+        if unique:
+            return c
+    return None
 
 
 @dataclass
@@ -96,21 +112,22 @@ def _diff(con, table: str, main_arrow, branch_arrow) -> TableDiff:
     con.register("m", main_arrow)
     con.register("b", branch_arrow)
     try:
-        if KEY_COLUMN in common:
-            d.key = KEY_COLUMN
+        key = _pick_key(con, common)
+        if key is not None:
+            d.key = key
             d.added = con.execute(
-                f'SELECT count(*) FROM b ANTI JOIN m USING ("{KEY_COLUMN}")'
+                f'SELECT count(*) FROM b ANTI JOIN m USING ("{key}")'
             ).fetchone()[0]
             d.removed = con.execute(
-                f'SELECT count(*) FROM m ANTI JOIN b USING ("{KEY_COLUMN}")'
+                f'SELECT count(*) FROM m ANTI JOIN b USING ("{key}")'
             ).fetchone()[0]
-            value_cols = [c for c in common if c != KEY_COLUMN]
+            value_cols = [c for c in common if c != key]
             if value_cols:
                 pred = " OR ".join(
                     f'b."{c}" IS DISTINCT FROM m."{c}"' for c in value_cols
                 )
                 d.changed = con.execute(
-                    f'SELECT count(*) FROM b JOIN m USING ("{KEY_COLUMN}") '
+                    f'SELECT count(*) FROM b JOIN m USING ("{key}") '
                     f"WHERE {pred}"
                 ).fetchone()[0]
             else:
