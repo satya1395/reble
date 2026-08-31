@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reble"
-version = "0.0.2"
+version = "0.0.3"
 description = "Your models are just SQL files. Branch your warehouse like you branch your code — local-first analytics on DuckDB + Iceberg + SQLGlot."
 readme = "README.md"
 license = { text = "Apache-2.0" }
