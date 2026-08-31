@@ -1,8 +1,10 @@
 # Reble Architecture
 
-**Scope:** A single CLI that gives a small data team a complete local-first analytics
-platform — DuckDB + Iceberg + SQLGlot-powered transforms pre-wired — with **subset
-branching** of the warehouse and **branch-per-PR CI** as the killer workflow.
+**Scope:** A single CLI that gives a small data team a complete analytics platform —
+DuckDB + Iceberg + SQLGlot-powered transforms pre-wired — with **subset branching**
+of the warehouse and **branch-per-PR CI** as the killer workflow. Local compute over
+cloud storage: your laptop (or a CI runner) is the query engine; your bucket is the
+warehouse — with a zero-services all-local mode as the on-ramp.
 **Models are plain SQL files** (filename = table name); dependencies, lineage, and
 change detection are inferred from the SQL itself.
 
