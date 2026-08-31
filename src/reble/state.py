@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS branches (
     pins        TEXT NOT NULL,      -- JSON {table ident: snapshot_id}
     base        TEXT NOT NULL,      -- JSON {table ident: snapshot_id at creation}
     created_at  REAL NOT NULL,
-    ttl_days    INTEGER NOT NULL
+    ttl_days    INTEGER NOT NULL,
+    open_scope  INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS current (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -46,6 +47,7 @@ class BranchManifest:
     base: dict[str, int]             # scoped tables -> main snapshot at creation (for clean/dirty)
     created_at: float
     ttl_days: int
+    open_scope: bool = False    # branch-first: scope grows at run time
 
 
 class StateStore:
@@ -53,6 +55,11 @@ class StateStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path)
         self._db.executescript(_SCHEMA)
+        try:  # migrate pre-open_scope state dbs
+            self._db.execute(
+                "ALTER TABLE branches ADD COLUMN open_scope INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
         self._db.execute(
             "INSERT OR IGNORE INTO current (id, branch) VALUES (1, ?)", (MAIN,)
         )
@@ -74,9 +81,10 @@ class StateStore:
             raise BranchError("'main' is not a creatable branch name")
         try:
             self._db.execute(
-                "INSERT INTO branches VALUES (?,?,?,?,?,?)",
+                "INSERT INTO branches VALUES (?,?,?,?,?,?,?)",
                 (m.name, json.dumps(m.scope), json.dumps(m.pins),
-                 json.dumps(m.base), m.created_at, m.ttl_days),
+                 json.dumps(m.base), m.created_at, m.ttl_days,
+                 int(m.open_scope)),
             )
         except sqlite3.IntegrityError:
             raise BranchError(f"branch {m.name!r} already exists") from None
@@ -84,17 +92,27 @@ class StateStore:
 
     def get(self, name: str) -> BranchManifest | None:
         row = self._db.execute(
-            "SELECT name, scope, pins, base, created_at, ttl_days "
+            "SELECT name, scope, pins, base, created_at, ttl_days, open_scope "
             "FROM branches WHERE name = ?", (name,)
         ).fetchone()
         if row is None:
             return None
         return BranchManifest(row[0], json.loads(row[1]), json.loads(row[2]),
-                              json.loads(row[3]), row[4], row[5])
+                              json.loads(row[3]), row[4], row[5], bool(row[6]))
 
     def list(self) -> list[BranchManifest]:
         return [m for r in self._db.execute("SELECT name FROM branches ORDER BY created_at")
                 if (m := self.get(r[0]))]
+
+    def add_to_scope(self, name: str, table: str) -> None:
+        m = self.get(name)
+        if m is None:
+            raise BranchError(f"branch {name!r} does not exist")
+        if table not in m.scope:
+            m.scope = sorted([*m.scope, table])
+            self._db.execute("UPDATE branches SET scope = ? WHERE name = ?",
+                             (json.dumps(m.scope), name))
+            self._db.commit()
 
     def update_base(self, name: str, table: str, snapshot_id: int) -> None:
         m = self.get(name)

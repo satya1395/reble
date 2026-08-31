@@ -72,7 +72,7 @@ branch "pr-123":
 
 1. *Edit-first* (shipped): change your models, then `reble branch create fix` —
    the diff against prod tells Reble exactly what to scope and pin.
-2. *Branch-first* (designed, next up): `reble branch create fix` on a clean tree
+2. *Branch-first* (shipped): `reble branch create fix` on a clean tree
    creates the branch with an **empty scope and a frozen epoch**. Edit models, then
    `reble run` — the plan reveals what changed, and the scope **grows lazily at run
    time**: refs are created for the changed tables *from their epoch snapshots* (not

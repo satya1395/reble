@@ -57,8 +57,12 @@ def status():
     click.echo(f"On branch {click.style(m.name, bold=True)}")
     click.echo(f"  created {datetime.fromtimestamp(m.created_at):%Y-%m-%d %H:%M} "
                f"(ttl {m.ttl_days}d)")
-    click.echo(f"  scope ({len(m.scope)} writable): {', '.join(m.scope)}")
-    click.echo(f"  pins  ({len(m.pins)} read-only tables frozen at branch creation)")
+    if m.open_scope:
+        click.echo(f"  scope (open, grows on run): {', '.join(m.scope) or '(none yet)'}")
+        click.echo("  reads: frozen as of the branch epoch")
+    else:
+        click.echo(f"  scope ({len(m.scope)} writable): {', '.join(m.scope)}")
+        click.echo(f"  pins  ({len(m.pins)} upstream inputs frozen at the epoch)")
 
 
 @cli.command()
@@ -141,6 +145,20 @@ def promote():
     click.echo("Back on main")
 
 
+@cli.command()
+def gc():
+    """Delete branches past their TTL (drops refs, releases pins)."""
+    try:
+        expired = _engine().gc()
+    except RebleError as e:
+        _fail(e)
+    if expired:
+        for name in expired:
+            click.echo(f"Deleted expired branch {name}")
+    else:
+        click.echo("Nothing to collect — no branches past their TTL.")
+
+
 @cli.group()
 def branch():
     """Create, list, switch, and delete warehouse branches."""
@@ -174,9 +192,16 @@ def branch_create(name: str, tables: str | None, pin_all: bool):
             scope, deps = analyze_project(cfg)
             inferred = True
             if not scope:
-                _fail(RebleError(
-                    "no model changes detected vs prod — edit your models first, "
-                    "or pass --tables explicitly"))
+                # branch-first, git-style: open scope + frozen epoch
+                m = eng.create(name, [], open_scope=True)
+                click.echo(f"Created branch {click.style(name, bold=True)} "
+                           "(branch-first: no changes yet)")
+                click.echo("  scope: open — grows automatically when you edit "
+                           "models and `reble run`")
+                click.echo("  reads: every table frozen as of this moment "
+                           "(the branch epoch)")
+                click.echo(f"Switched to {name}")
+                return
         pin_tables = None
         if not pin_all:
             if not inferred:

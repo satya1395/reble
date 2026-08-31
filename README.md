@@ -32,9 +32,9 @@ reble diff                              # schema + row-level diff vs your branch
 reble promote                           # atomic fast-forward to main, clean up
 ```
 
-Both git orders work: edit-first (scope inferred from the diff, shipped) or
-branch-first (empty scope + frozen epoch; scope grows at first run — designed,
-landing next).
+Both git orders work: edit-first (scope inferred from the diff) or branch-first
+(empty scope + frozen epoch; the scope grows automatically at first run, and reads
+resolve as of the moment you branched).
 
 - **Zero-copy branches** — branched tables use native Iceberg refs (copy-on-write);
   a branch of a 10GB table costs ~nothing until you write.

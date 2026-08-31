@@ -22,6 +22,8 @@ from reble.config import RebleConfig
 from reble.errors import BranchError, WriteGuardError
 from reble.state import MAIN, BranchManifest, StateStore
 
+EPOCH_EMPTY = -1   # table did not exist (or had no data) at the branch epoch
+
 
 @contextmanager
 def _quiet_overwrite():
@@ -63,16 +65,33 @@ class BranchEngine:
         snap = tbl.current_snapshot()
         return snap.snapshot_id if snap else None
 
+    def _snapshot_as_of(self, table: str, epoch_s: float) -> int | None:
+        """Latest snapshot committed at or before the epoch (seconds), else None."""
+        try:
+            tbl = self.catalog.load_table(table)
+        except NoSuchTableError:
+            return None
+        epoch_ms = int(epoch_s * 1000)
+        best = None
+        for entry in tbl.metadata.snapshot_log:
+            if entry.timestamp_ms <= epoch_ms:
+                best = entry.snapshot_id
+        return best
+
     # -- lifecycle -------------------------------------------------------------
     def create(self, name: str, scope: list[str],
-               pin_tables: list[str] | None = None) -> BranchManifest:
+               pin_tables: list[str] | None = None,
+               open_scope: bool = False) -> BranchManifest:
         """Create a subset branch.
 
         pin_tables: which tables to pin (lineage-scoped upstream inputs, when the
         caller knows them). None = pin every non-scoped table — the safe fallback
         when inputs can't be inferred (raw tables, external writers).
+
+        open_scope: branch-first mode — empty scope allowed; the scope grows at
+        run time and every unscoped read resolves as of the branch epoch.
         """
-        if not scope:
+        if not scope and not open_scope:
             raise BranchError("a branch needs a scope: pass the tables you'll change")
         existing = set(self._all_tables())
 
@@ -92,16 +111,20 @@ class BranchEngine:
                 # empty table (no snapshot yet): ref is created on first write
             # not in catalog yet: new-model workflow, created on first write
 
-        pinnable = (existing & set(pin_tables)) if pin_tables is not None \
-            else existing - set(scope)
-        pins = {
-            t: s for t in pinnable
-            if (s := self._snapshot_id(t)) is not None
-        }
+        if open_scope:
+            pins = {}   # epoch resolution covers every unscoped read lazily
+        else:
+            pinnable = (existing & set(pin_tables)) if pin_tables is not None \
+                else existing - set(scope)
+            pins = {
+                t: s for t in pinnable
+                if (s := self._snapshot_id(t)) is not None
+            }
 
         m = BranchManifest(
             name=name, scope=sorted(scope), pins=pins, base=base,
             created_at=time.time(), ttl_days=self.cfg.default_branch_ttl_days,
+            open_scope=open_scope,
         )
         self.state.add(m)
         self.state.set_current(name)
@@ -187,6 +210,23 @@ class BranchEngine:
         self.state.remove(name)                       # also resets current to main
         return {"branch": name, "promoted": promoted, "stale_pins": stale_pins}
 
+    def grow_scope(self, table: str) -> None:
+        """Open-scope branches only: admit a table into the writable scope."""
+        m = self.current()
+        if m is None:
+            raise BranchError("on main — no branch scope to grow")
+        if not m.open_scope:
+            raise BranchError(
+                f"branch {m.name!r} has an explicit scope; {table!r} is outside it")
+        self.state.add_to_scope(m.name, table)
+
+    def gc(self) -> list[str]:
+        """Delete branches past their TTL (drops refs, releases pins)."""
+        expired = [m.name for m in self.state.expired()]
+        for name in expired:
+            self.delete(name)
+        return expired
+
     # -- resolution ------------------------------------------------------------
     def resolve_read(self, table: str) -> int | None:
         """Snapshot id a read of `table` should use on the current branch.
@@ -205,7 +245,10 @@ class BranchEngine:
             return ref.snapshot_id if ref else None
         if table in m.pins:
             return m.pins[table]
-        return None  # table created on main after branching; read current
+        # no precomputed pin: resolve as of the branch epoch (strict
+        # reproducibility — the branch point is when you branched)
+        snap = self._snapshot_as_of(table, m.created_at)
+        return snap if snap is not None else EPOCH_EMPTY
 
     # -- guarded writes --------------------------------------------------------
     def write(self, table: str, df: pa.Table, mode: str = "append") -> None:
@@ -232,17 +275,31 @@ class BranchEngine:
             self.catalog.create_namespace_if_not_exists(ns)
             tbl = self.catalog.create_table(table, schema=df.schema)
         if m.name not in tbl.metadata.refs:
+            epoch_snap = self._snapshot_as_of(table, m.created_at)
             snap = tbl.current_snapshot()
-            if snap is None:
+            if epoch_snap is not None:
+                tbl.manage_snapshots().create_branch(epoch_snap, m.name).commit()
+                self.state.update_base(m.name, table, epoch_snap)
+                tbl = self.catalog.load_table(table)
+                snap = None  # handled
+            elif snap is not None:
+                # table born after the epoch: treat as new on this branch —
+                # branch from an empty state is impossible per-table, so seed
+                # the ref at current but record base for the clean/dirty check
+                tbl.manage_snapshots().create_branch(snap.snapshot_id, m.name).commit()
+                self.state.update_base(m.name, table, snap.snapshot_id)
+                tbl = self.catalog.load_table(table)
+                snap = None  # handled
+            if snap is None and m.name not in tbl.metadata.refs:
                 # brand-new table: Iceberg requires the first commit on main, so
                 # seed an EMPTY snapshot there (name + schema visible, zero rows),
                 # then branch from it — the data itself lands only on the ref
                 tbl.append(df.schema.empty_table())
                 tbl = self.catalog.load_table(table)
-                snap = tbl.current_snapshot()
-            tbl.manage_snapshots().create_branch(snap.snapshot_id, m.name).commit()
-            self.state.update_base(m.name, table, snap.snapshot_id)
-            tbl = self.catalog.load_table(table)
+                seeded = tbl.current_snapshot()
+                tbl.manage_snapshots().create_branch(seeded.snapshot_id, m.name).commit()
+                self.state.update_base(m.name, table, seeded.snapshot_id)
+                tbl = self.catalog.load_table(table)
         if mode == "overwrite":
             with _quiet_overwrite():
                 tbl.overwrite(df, branch=m.name)

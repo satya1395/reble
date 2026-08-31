@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 import duckdb
 import pyarrow as pa
 
-from reble.branches import BranchEngine
+from reble.branches import EPOCH_EMPTY, BranchEngine
 from reble.config import RebleConfig
 from reble.errors import RebleError
 
@@ -136,7 +136,12 @@ def run(cfg: RebleConfig, engine: BranchEngine) -> RunResult:
         try:
             for t in to_mirror:
                 snap = engine.resolve_read(t)
-                arrow = engine.catalog.load_table(t).scan(snapshot_id=snap).to_arrow()
+                tbl = engine.catalog.load_table(t)
+                if snap == EPOCH_EMPTY:
+                    # table born after the branch epoch: the branch sees it empty
+                    arrow = tbl.scan().to_arrow().schema.empty_table()
+                else:
+                    arrow = tbl.scan(snapshot_id=snap).to_arrow()
                 schema, name = t.rsplit(".", 1)
                 con.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
                 con.register("_reble_mirror", arrow)
@@ -177,9 +182,14 @@ def run(cfg: RebleConfig, engine: BranchEngine) -> RunResult:
             fp = fps.get(target)
             stale = fp is None or fp != engine.state.published_fp(pub_ctx, target)
             if manifest and target not in manifest.scope:
-                if stale:
+                if manifest.open_scope and stale:
+                    engine.grow_scope(target)          # branch-first: scope grows
+                    manifest = engine.current()
+                elif stale:
                     res.guard_skipped.append(target)
-                continue
+                    continue
+                else:
+                    continue
             if not stale and _exists_at(engine, target, manifest):
                 continue   # this exact snapshot version is already published there
             schema, name = target.rsplit(".", 1)
