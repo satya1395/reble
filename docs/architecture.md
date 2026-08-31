@@ -228,6 +228,25 @@ migration. Reble never needs to become distributed; it needs to never block
 your exit to something that is. (Arrow itself is a memory format, not an
 engine — it distributes nothing.)
 
+### Where branch state lives (honest version)
+
+Two layers, different homes today:
+
+| | lives in | shared? |
+|---|---|---|
+| **Iceberg refs** (per-table branch pointers) + all data | the warehouse (bucket) | ✅ immediately — any Iceberg reader sees them |
+| **Branch manifests** (name, scope, pins, epoch, TTL, current-branch, published fingerprints) | `.reble/state.db` — local SQLite | ❌ not yet |
+
+So in the validated single-user mode, a branch's *isolation* is fully
+bucket-resident, but its *identity* is local: `reble branch list` on a
+teammate's machine won't show your branches even against the same bucket.
+This is team mode's real missing piece: the state schema is deliberately
+portable and moves to the **shared Postgres alongside the catalog** (F11) —
+at which point branch listing, overlap warnings, and the promote lock become
+team-wide. (Future option worth a spike: S3 conditional writes now allow
+compare-and-swap, so branch state could live in the bucket itself —
+"the bucket is the entire warehouse, branches included.")
+
 ### Load-bearing design decisions
 
 **Language: Python.** SQLGlot, pyiceberg, and DuckDB all live natively in Python;
