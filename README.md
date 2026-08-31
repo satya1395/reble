@@ -13,6 +13,8 @@ warehouse and branch-per-PR CI for data pipelines.
 
 **→ [Why Reble exists](docs/why.md)** — the full story: the four gaps in data
 engineering workflows, why existing tools don't close them, and why now.
+**→ [Real workflows](docs/workflows.md)** — four scenarios you've lived through
+(the metric fix, the greenfield mart, the parallel team, the save), with branches.
 
 ## The idea
 
@@ -96,6 +98,7 @@ mode (S3/MinIO + Postgres or REST catalog) via config.
 ## Design docs
 
 - [Why Reble exists](docs/why.md) — motivation and positioning
+- [Real workflows](docs/workflows.md) — relatable scenarios with full CLI transcripts
 - [Architecture & implementation plan](docs/architecture.md)
 - [Getting started](docs/getting-started.md)
 - [Validated spikes](spikes/) — reproducible proof the core primitives work today
