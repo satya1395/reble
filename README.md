@@ -23,7 +23,9 @@ lineage tooling. A model with no config is a FULL rebuild; the few models that n
 more (incremental, in v0.2) get a couple of lines in the one `reble.yml` the project
 already has — never boilerplate per model.
 
-Reble is a single CLI that gives a small data team a complete analytics platform —
+Reble is a single CLI that gives a data team — three people or three hundred — a
+complete analytics platform: what's sized is the *run*, not the org. Each run is
+one fast node over just the tables it touches —
 DuckDB + Apache Iceberg + SQLGlot-powered transforms, pre-wired — with subset
 branching of the warehouse and branch-per-PR CI for data pipelines. Data lives in
 S3/GCS (or on local disk while you're trying it out); the query engine is DuckDB
@@ -366,9 +368,10 @@ catalog:
 - Not a dbt/SQLMesh replacement you must migrate to all at once — importers
   (`{{ ref('...') }}` and `MODEL(...)` translation) are on the roadmap.
 - Reble doesn't compete with Snowflake the product. It competes for the workloads
-  that never needed it — for a small team, the honest question isn't *"which
-  warehouse?"* but *"do you need a warehouse vendor at all?"* Compute is one fast
-  node over data in your bucket, not a cluster.
+  that never needed it — and for most pipelines, the honest question isn't
+  *"which warehouse?"* but *"does this workload need a warehouse vendor at
+  all?"* Compute is one fast node per run over data in your bucket, not a
+  cluster.
 - Not a full-catalog branching system (see Nessie/lakeFS for that) — Reble branches
   subsets over standard Iceberg catalogs, no migration required.
 

@@ -112,7 +112,7 @@ neither Slim CI nor manual clone discipline gives you structurally.
   Iceberg, and SQLGlot, and adds the branch layer and glue.
 - **Not a Snowflake competitor — a different question entirely.** Reble doesn't
   compete with Snowflake the product; it competes for the workloads that never
-  needed it. For a small team, the honest question isn't *"which warehouse?"* but
+  needed it. For most pipelines, the honest question isn't *"which warehouse?"* but
   *"do you need a warehouse vendor at all?"* One fast node over data in your
   bucket — correct and pleasant at tens of gigabytes, not petabytes on a cluster.
 - **Not a data merge tool.** Promote or discard. Never merge.
