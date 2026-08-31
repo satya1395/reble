@@ -17,6 +17,7 @@ from contextlib import contextmanager
 import pyarrow as pa
 from pyiceberg.catalog import Catalog, load_catalog
 from pyiceberg.exceptions import NoSuchTableError
+from pyiceberg.table.update import SetCurrentSchemaUpdate
 
 from reble.config import RebleConfig
 from reble.errors import BranchError, WriteGuardError
@@ -204,6 +205,12 @@ class BranchEngine:
             tbl.manage_snapshots().set_current_snapshot(
                 snapshot_id=branch_snap).commit()
             tbl = self.catalog.load_table(t)
+            # promote carries the branch's schema forward with its data
+            snap = tbl.snapshot_by_id(branch_snap)
+            if snap is not None and snap.schema_id is not None \
+                    and snap.schema_id != tbl.metadata.current_schema_id:
+                self._set_current_schema_id(tbl, snap.schema_id)
+                tbl = self.catalog.load_table(t)
             if m.name in tbl.metadata.refs:
                 tbl.manage_snapshots().remove_branch(m.name).commit()
             promoted.append(t)
@@ -256,18 +263,26 @@ class BranchEngine:
     def _align_schema(self, tbl, df: pa.Table):
         """FULL-model overwrites own the table's schema: when a model's output
         columns change, evolve the Iceberg schema to match (add new columns,
-        drop removed ones) before writing. Known limitation: Iceberg schemas
-        are table-level, not per-ref, so a branch's schema change is visible
-        as the table's current schema before promote (data stays isolated)."""
+        drop removed ones) before writing. Returns (table, changed)."""
         current = {f.name for f in tbl.schema().fields}
         new = set(df.schema.names)
         if current == new:
-            return tbl
+            return tbl, False
         with tbl.update_schema(allow_incompatible_changes=True) as upd:
             upd.union_by_name(df.schema)
             for name in current - new:
                 upd.delete_column(name)
-        return self.catalog.load_table(".".join(tbl.name()[-2:]))
+        return self.catalog.load_table(".".join(tbl.name()[-2:])), True
+
+    def _set_current_schema_id(self, tbl, schema_id: int):
+        """Schemas ride with snapshots: a branch write registers its schema
+        (so its snapshots project correctly) but must not change what MAIN
+        readers see. pyiceberg's high-level API always makes an evolved schema
+        current, so we flip current-schema-id explicitly. Covered by the API
+        contract tests; revisit on pyiceberg upgrades."""
+        tx = tbl.transaction()
+        tx._apply((SetCurrentSchemaUpdate(schema_id=schema_id),), ())
+        tx.commit_transaction()
 
     # -- guarded writes --------------------------------------------------------
     def write(self, table: str, df: pa.Table, mode: str = "append") -> None:
@@ -320,9 +335,15 @@ class BranchEngine:
                 self.state.update_base(m.name, table, seeded.snapshot_id)
                 tbl = self.catalog.load_table(table)
         if mode == "overwrite":
-            tbl = self._align_schema(tbl, df)
+            pre_schema_id = tbl.metadata.current_schema_id
+            tbl, schema_changed = self._align_schema(tbl, df)
             with _quiet_overwrite():
                 tbl.overwrite(df, branch=m.name)
+            if schema_changed:
+                # branch snapshots carry the new schema; main keeps seeing
+                # the old one until promote
+                self._set_current_schema_id(
+                    self.catalog.load_table(table), pre_schema_id)
         else:
             tbl.append(df, branch=m.name)
 
@@ -334,7 +355,7 @@ class BranchEngine:
             self.catalog.create_namespace_if_not_exists(ns)
             tbl = self.catalog.create_table(table, schema=df.schema)
         if mode == "overwrite":
-            tbl = self._align_schema(tbl, df)
+            tbl, _ = self._align_schema(tbl, df)   # on main, evolving forward is correct
             with _quiet_overwrite():
                 tbl.overwrite(df)
         else:

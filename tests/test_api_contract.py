@@ -57,6 +57,15 @@ class TestPyicebergContract:
         assert "refs" in fields
         assert "snapshot_log" in fields
 
+    def test_schema_ride_machinery(self):
+        # branch-write schema isolation depends on these staying available
+        from pyiceberg.table.update import SetCurrentSchemaUpdate  # noqa: F401
+        from pyiceberg.table import Table
+        from pyiceberg.table.snapshots import Snapshot
+        assert "schema_id" in Snapshot.model_fields
+        assert hasattr(Table, "snapshot_by_id")
+        assert hasattr(Table, "transaction")
+
     def test_sql_catalog_loadable(self):
         from pyiceberg.catalog import load_catalog  # noqa: F401  (import is the test)
 

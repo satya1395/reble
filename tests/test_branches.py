@@ -103,4 +103,16 @@ def test_overwrite_evolves_schema(eng):
     eng.write("demo.orders", newer, mode="overwrite")         # branch, new schema
     tbl = eng.catalog.load_table("demo.orders")
     b = tbl.scan(snapshot_id=tbl.metadata.refs["dev"].snapshot_id).to_arrow()
-    assert set(b.column_names) >= {"status", "n"}
+    assert set(b.column_names) == {"status", "n"}
+
+    # MAIN must be completely unaffected: same columns, same VALUES
+    main = tbl.scan().to_arrow()
+    assert set(main.column_names) == {"status", "revenue"}
+    assert main.to_pydict()["status"] == ["a", "b"]           # real data, not NULLs
+
+    # promote carries the branch's schema forward with its data
+    res = eng.promote()
+    assert res["promoted"] == ["demo.orders"]
+    after = eng.catalog.load_table("demo.orders").scan().to_arrow()
+    assert set(after.column_names) == {"status", "n"}
+    assert after.to_pydict()["n"] == [1]
