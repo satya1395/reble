@@ -1,8 +1,14 @@
 # Reble Architecture
 
 **Scope:** A single CLI that gives a small data team a complete local-first analytics
-platform — DuckDB + Iceberg + SQLMesh pre-wired — with **subset branching** of the
-warehouse and **branch-per-PR CI** as the killer workflow.
+platform — DuckDB + Iceberg + SQLGlot-powered transforms pre-wired — with **subset
+branching** of the warehouse and **branch-per-PR CI** as the killer workflow.
+**Models are plain SQL files** (filename = table name); dependencies, lineage, and
+change detection are inferred from the SQL itself.
+
+> **Engine migration note:** the shipped source still embeds SQLMesh as the runner;
+> the SQLGlot-direct core described in this document is validated
+> ([spike 4](../spikes/04-sqlglot-direct/RESULTS.md)) and replacing it.
 
 For the motivation and positioning, see [why.md](why.md). For proof the primitives
 work at target scale, see the reproducible [spikes](../spikes/).
@@ -12,7 +18,7 @@ work at target scale, see the reproducible [spikes](../spikes/).
 ## 1. Product shape
 
 ```
-$ reble init my-warehouse        # scaffold project (SQLMesh models, config, local catalog)
+$ reble init my-warehouse        # scaffold project (plain-SQL models, config, local catalog)
 $ reble run                      # run models against main
 $ reble branch create fix-orders # scope + pins inferred from your edits
 $ reble run                      # runs on branch: writes go to branched refs,
@@ -31,7 +37,7 @@ And in CI (the flagship workflow):
 ```
 
 Everything runs on a laptop with **zero services**: DuckDB embedded, Iceberg tables on
-local filesystem, SQLite-backed catalog, SQLMesh in-process. The same project scales to
+local filesystem, SQLite-backed catalog, transforms in-process. The same project scales to
 team mode (S3 + Postgres/REST catalog + CI runners) by changing config, not tools.
 
 ---
@@ -62,11 +68,11 @@ branch "pr-123":
   scoped models are pinned (change 2 models in a 100-model warehouse and you pin
   their 4 inputs, not 96 tables) — anything else is simply irrelevant to the branch.
   `--pin-all` forces blanket pinning for warehouses where external writers touch
-  tables SQLMesh can't see.
+  tables the model graph can't see.
 - **Scope inference (shipped):** `reble branch create <name>` needs no arguments —
-  the SQLMesh plan supplies the scope (your changed models *plus* their downstream
-  cascade) and the dependency graph supplies the pins. `--tables` remains as an
-  explicit override.
+  the model-graph diff supplies the scope (your changed models *plus* their
+  downstream cascade) and the dependency graph supplies the pins. `--tables` remains
+  as an explicit override.
 
 **Both git orders work.** Like git, you can edit first or branch first:
 
@@ -83,7 +89,7 @@ branch "pr-123":
 **Promote ≠ merge.**
 1. If the branched tables' `main` refs haven't advanced since branch creation →
    fast-forward `main` to the branch ref (cheap, atomic per table).
-2. Otherwise → re-apply the SQLMesh plan against main (rerun the changed models).
+2. Otherwise → re-apply against main (rerun the changed models there).
    No data-level merge, ever. Last-write-wins data merges silently corrupt warehouses;
    we refuse to build that. Branches are ephemeral: create, test, promote or discard.
 
@@ -95,10 +101,18 @@ comment; the branch earns its keep for greenfield work through pinned inputs dur
 iteration, isolation of work-in-progress tables, and automatic registration in the
 lineage graph on promote.
 
-**SQLMesh mapping:** one reble branch ↔ one SQLMesh environment (1:1). SQLMesh handles
-model-level change detection and virtual promotion *within* its managed models; reble
-adds the physical layer underneath — branched refs, pinned upstreams, and coverage of
-tables SQLMesh doesn't manage (raw/source tables, external writers).
+**Model format & engine.** A model is a plain SQL file: `models/demo/orders.sql`
+defines table `demo.orders`, full stop. SQLGlot parses each file once and supplies:
+
+- **dependencies** — table references read from the AST (CTEs excluded), which drive
+  scope inference, pins, and topological execution order;
+- **column-level lineage** — for impact analysis and lineage-aware promotes;
+- **change detection** — fingerprints hash the *canonical* AST (whitespace, comments,
+  and keyword case don't count) composed with upstream fingerprints, so a change to
+  a model re-runs it and its downstream cascade, and nothing else.
+
+There is deliberately no second environment system: Iceberg branch refs are the one
+and only isolation layer, for model outputs and raw tables alike.
 
 **Concurrency & team workflow.** Multiple engineers work on branches simultaneously
 (independent refs; requires the shared team-mode catalog — local SQLite is
@@ -113,7 +127,7 @@ single-user) and promote sequentially:
    → fast-forward refused, rebase mandatory. Reble warns at branch *creation* when a
    table in scope is already branched by someone else.
 4. **`reble branch rebase`** is a first-class command: re-pin upstreams to current
-   main, rerun changed models (cheap via SQLMesh change detection), re-validate.
+   main, rerun changed models (cheap via fingerprint change detection), re-validate.
    Rebase-then-promote is the only path forward for a stale branch — never data merge.
 
 ---
@@ -129,11 +143,11 @@ single-user) and promote sequentially:
 │  branch manifests · snapshot pinning · write guards ·      │
 │  promote (fast-forward / re-apply) · TTL + GC              │
 ├──────────────────────────┬─────────────────────────────────┤
-│  Catalog Resolver        │  Runner                         │
-│  wraps the underlying    │  SQLMesh plan/apply with        │
-│  Iceberg catalog; every  │  branch context; DuckDB         │
-│  table lookup resolves   │  computes, pyiceberg commits    │
-│  through branch context  │  to the branch ref              │
+│  Catalog Resolver        │  Runner (SQLGlot-direct)        │
+│  wraps the underlying    │  parse -> deps -> fingerprints  │
+│  Iceberg catalog; every  │  -> topo order; DuckDB computes │
+│  table lookup resolves   │  over Iceberg-backed views;     │
+│  through branch context  │  pyiceberg commits to the ref   │
 ├──────────────────────────┴─────────────────────────────────┤
 │  Storage & catalog                                         │
 │  local:  filesystem warehouse + pyiceberg SQL catalog      │
@@ -145,16 +159,18 @@ single-user) and promote sequentially:
 
 ### Load-bearing design decisions
 
-**Language: Python.** SQLMesh and pyiceberg are Python libraries; wrapping them
-in-process is the whole point. "Single binary" is a distribution concern, not a
+**Language: Python.** SQLGlot, pyiceberg, and DuckDB all live natively in Python;
+wrapping them in-process is the whole point. "Single binary" is a distribution concern, not a
 language concern: v1 ships via `uv tool install reble` / pipx; a single-file build is
 a fast-follow.
 
 **Compute: DuckDB computes, pyiceberg commits.** The DuckDB iceberg extension is
-read-oriented; Reble does not depend on DuckDB writing Iceberg. The runner executes
-model SQL in DuckDB (reading branch-resolved Iceberg scans), collects results as
-Arrow, and commits to the branch ref via pyiceberg. Validated end-to-end in
-[spike 3](../spikes/03-sqlmesh-embedding/RESULTS.md).
+read-oriented; Reble does not depend on DuckDB writing Iceberg. Each run opens an
+**ephemeral in-memory DuckDB session**, registers branch-resolved Iceberg scans as
+views, executes models in dependency order, and commits outputs to the branch ref
+via pyiceberg — data lives in Iceberg and nowhere else; there is no persistent
+intermediate database. Validated end-to-end in
+[spike 4](../spikes/04-sqlglot-direct/RESULTS.md).
 
 **Projection pushdown everywhere.** At 10GB scale the constraint is RAM, not time
 (measured in [spike 2](../spikes/02-perf/RESULTS.md)): every scan — model inputs and
@@ -180,12 +196,15 @@ drops their refs, and releases pins. The CI action deletes branches on PR close.
 
 ## 4. Deliberately out of scope (v1)
 
-- Web UI (SQLMesh ships its own UI; `reble ui` can shell out to it later)
+- Web UI
 - Unity Catalog, Trino, Spark integrations
 - Data-level merge of branches
+- Incremental (time-interval) materializations — FULL models only in v1; at the
+  target scale a full rebuild is seconds (see spike 2)
 - Multi-tenant cloud service, auth/RBAC
 - Scheduling/orchestration (Airflow etc.)
-- dbt compatibility (SQLMesh only)
+- Embedded dbt/SQLMesh compatibility — planned as *importers* (`{{ ref('...') }}`
+  and `MODEL(...)` translation), not as core dependencies
 
 ---
 
@@ -198,8 +217,9 @@ scripts in [`spikes/`](../spikes/):
 |---|---|---|
 | [01 — branch lifecycle](../spikes/01-pyiceberg-branches/RESULTS.md) | create / write / isolate / pin / promote / cleanup on Iceberg refs, plus DuckDB reads via Arrow | ✅ |
 | [02 — performance](../spikes/02-perf/RESULTS.md) | full loop at **140M rows / 10.22GB** on a laptop: branch create <10ms, full diff 5.9s | ✅ |
-| [03 — SQLMesh embedding](../spikes/03-sqlmesh-embedding/RESULTS.md) | headless plan/apply, env-per-branch, column lineage, change detection, Arrow→Iceberg branch commit | ✅ |
+| [03 — SQLMesh embedding](../spikes/03-sqlmesh-embedding/RESULTS.md) | *(historical — superseded by spike 4)* headless plan/apply, env-per-branch | ✅ |
+| [04 — SQLGlot-direct core](../spikes/04-sqlglot-direct/RESULTS.md) | deps (CTE-safe), topo order, column lineage, cosmetic-vs-semantic fingerprints with upstream cascade, ~20-line runner over Iceberg-backed views onto branch refs | ✅ |
 
-Pinned versions: `pyiceberg==0.11.1`, `sqlmesh==0.236.1`, `duckdb==1.5.5`. Two of the
-APIs relied on are not formally public surface; the spikes double as upgrade
-regression tests.
+Pinned versions: `pyiceberg==0.11.1`, `sqlglot==30.8.0`, `duckdb==1.5.5` (the
+`sqlmesh` pin remains only until the runner migration lands). The spikes double as
+upgrade regression tests.

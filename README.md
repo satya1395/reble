@@ -1,15 +1,27 @@
 # Reble
 
-**Branch your warehouse like you branch your code.**
+**Your models are just SQL files. Branch your warehouse like you branch your code.**
+
+```sql
+-- models/demo/orders_clean.sql      ← filename = table name. That's the whole format.
+SELECT id, amount FROM raw.orders WHERE amount > 0
+```
+
+No `MODEL(...)` headers. No Jinja `{{ ref('...') }}`. No YAML. Dependencies, column
+lineage, and change detection are read from the SQL you already wrote — powered by
+[SQLGlot](https://github.com/tobymao/sqlglot), the parser underneath the ecosystem's
+lineage tooling.
 
 Reble is a single CLI that gives a small data team a complete local-first analytics
-platform — DuckDB + Apache Iceberg + SQLMesh pre-wired — with subset branching of the
-warehouse and branch-per-PR CI for data pipelines.
+platform — DuckDB + Apache Iceberg + SQLGlot-powered transforms, pre-wired — with
+subset branching of the warehouse and branch-per-PR CI for data pipelines.
 
 > ⚠️ **Status: pre-alpha, but real.** The full loop works today — `init → run →
 > branch → run → diff → promote`, both git orders, with 25 passing tests — from
-> source install only (no PyPI release yet). Feedback is the most valuable
-> contribution — open a Discussion.
+> source install only (no PyPI release yet). One migration in flight: the current
+> source still embeds SQLMesh as the runner; the SQLGlot-direct core described here
+> is [validated](spikes/04-sqlglot-direct/RESULTS.md) and replacing it. Feedback is
+> the most valuable contribution — open a Discussion.
 
 **→ [Why Reble exists](docs/why.md)** — the full story: the four gaps in data
 engineering workflows, why existing tools don't close them, and why now.
@@ -43,8 +55,9 @@ resolve as of the moment you branched).
   time, so your test inputs don't drift while prod keeps ingesting.
 - **Row-level diffs** — answer the question every reviewer actually has: *what rows
   does this change?*
-- **Column-level lineage & change detection** — via SQLMesh, embedded: only changed
-  models run, downstream impact is shown before you apply.
+- **Column-level lineage & change detection** — inferred from your SQL via SQLGlot:
+  only changed models run (cosmetic edits don't count — hashing is on the canonical
+  AST), and downstream impact is shown before you apply.
 - **No merge, ever** — branches are ephemeral: create, test, promote (fast-forward or
   re-run) or discard. We refuse to build last-write-wins data merges.
 
@@ -91,7 +104,7 @@ Switched to fix-cancelled-revenue
 ```
 
 Notice what you didn't do: enumerate the downstream cascade. Reble read it off the
-SQLMesh graph — your one-line edit touches three tables, and the two raw inputs are
+model graph — your one-line edit touches three tables, and the two raw inputs are
 pinned so hourly ingestion can't shift your numbers mid-analysis.
 
 ```console
@@ -274,7 +287,7 @@ full-scale performance run — **140M rows / 10.22GB** on an Apple M4 Pro laptop
 Peak RAM 12.3GB, 3.5GB on disk (Parquet ≈ 2.9× compression). Details and the scripts
 to reproduce: [spike 1 — branch lifecycle](spikes/01-pyiceberg-branches/RESULTS.md) ·
 [spike 2 — performance](spikes/02-perf/RESULTS.md) ·
-[spike 3 — SQLMesh embedding](spikes/03-sqlmesh-embedding/RESULTS.md).
+[spike 4 — the SQLGlot-direct core](spikes/04-sqlglot-direct/RESULTS.md).
 
 ## The killer workflow: branch-per-PR
 
@@ -290,13 +303,15 @@ Data PRs become reviewable like code PRs — scenario 1 above, fully automated.
 ## Local-first, zero services
 
 Everything runs on a laptop: DuckDB embedded, Iceberg on local filesystem, SQLite
-catalog, SQLMesh in-process. No Docker, no daemons. The same project moves to team
+catalog, transforms in-process. No Docker, no daemons. The same project moves to team
 mode (S3/MinIO + Postgres or REST catalog) via config.
 
 ## What Reble is not
 
 - Not a query engine, storage engine, or table format — it composes DuckDB, Iceberg,
-  and SQLMesh and adds the branching layer and glue.
+  and SQLGlot and adds the branching layer and glue.
+- Not a dbt/SQLMesh replacement you must migrate to all at once — importers
+  (`{{ ref('...') }}` and `MODEL(...)` translation) are on the roadmap.
 - Not a Snowflake competitor — the target is small teams and the local/CI loop.
 - Not a full-catalog branching system (see Nessie/lakeFS for that) — Reble branches
   subsets over standard Iceberg catalogs, no migration required.

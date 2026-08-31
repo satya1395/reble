@@ -38,9 +38,9 @@ there since.
 
 ### 4. The open stack is real but unassembled
 
-DuckDB + Iceberg + SQLMesh is a genuinely great analytics stack — embedded compute,
-open table format with time travel, transformations with column-level lineage and
-change detection. Small teams are noticing; "lakehouse on a laptop" went from meme to
+DuckDB + Iceberg + SQLGlot is a genuinely great analytics stack — embedded compute,
+open table format with time travel, and a parser that can read dependencies, column
+lineage, and change detection straight out of plain SQL. Small teams are noticing; "lakehouse on a laptop" went from meme to
 practice. But wiring it together — catalog, storage layout, environments, CI — is a
 weekend of yak-shaving per team, redone everywhere, slightly differently, usually
 without branching at all.
@@ -86,23 +86,27 @@ neither Slim CI nor manual clone discipline gives you structurally.
 ## Why now
 
 - **The transform stack is being reevaluated.** dbt's Fusion transition and licensing
-  turbulence pushed many teams to reassess for the first time in years. Meanwhile
-  SQLMesh — which Reble embeds — was
-  [donated to the Linux Foundation in March 2026](https://www.fivetran.com/press/fivetran-contributes-sqlmesh-to-the-linux-foundation-to-advance-open-data-infrastructure),
-  putting the core dependency under vendor-neutral, community governance.
+  turbulence pushed many teams to reassess for the first time in years. Reble's answer
+  is deliberately minimal: **your models are just SQL files** — no headers, no Jinja,
+  no YAML — with dependencies and lineage inferred by
+  [SQLGlot](https://github.com/tobymao/sqlglot), the same parser foundation the
+  ecosystem's transform and lineage tools are built on. Importers for dbt
+  (`{{ ref('...') }}`) and SQLMesh (`MODEL(...)`) projects are on the roadmap, so
+  reevaluating doesn't mean rewriting.
 - **Iceberg won the table-format question.** Native per-table branching, time travel,
   and an ecosystem from DuckDB to Snowflake. The primitives Reble needs shipped;
   nobody had composed them into this workflow.
 - **The pieces are proven, today.** This repo's [`spikes/`](../spikes/) directory
   contains reproducible scripts validating the full loop on current releases:
   zero-copy branch refs, isolated branch writes, pinned reads, one-line promote
-  (spike 1) and fully-programmatic SQLMesh plan/apply, column lineage, change
-  detection, Arrow hand-off into an Iceberg branch (spike 3). All green.
+  (spike 1); laptop-scale performance at 10GB (spike 2); and the full SQLGlot-direct
+  core — deps, lineage, change-detection hashing, and a ~20-line runner executing
+  over Iceberg-backed views (spike 4). All green.
 
 ## What Reble is not
 
 - **Not a query engine, storage engine, or table format.** We compose DuckDB,
-  Iceberg, and SQLMesh, and add the branch layer and glue.
+  Iceberg, and SQLGlot, and add the branch layer and glue.
 - **Not a Snowflake competitor.** The target is small teams and the local/CI loop —
   correct and pleasant at tens of gigabytes on a laptop, not petabytes on a cluster.
 - **Not a data merge tool.** Promote or discard. Never merge.

@@ -13,12 +13,13 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 ```
 
 No Docker, no services. DuckDB is embedded, Iceberg tables live on your filesystem,
-the catalog is SQLite, SQLMesh runs in-process.
+the catalog is SQLite, and transforms run in-process — models are plain SQL files
+(filename = table name), with dependencies inferred from the SQL by SQLGlot.
 
 ## First branch in 5 minutes
 
 ```bash
-# 1. Scaffold a project (SQLMesh models, config, local warehouse, example data)
+# 1. Scaffold a project (models, config, local warehouse, example data)
 reble init my-warehouse && cd my-warehouse
 
 # 2. Build main
