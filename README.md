@@ -18,6 +18,8 @@ SELECT id, amount FROM raw.orders WHERE amount > 0
 
 ![The reble loop in 20 seconds: branch create with inferred scope, run, row-level diff, query on the branch, promote](docs/assets/demo.gif)
 
+<sub>Prefer stills? The full [CLI output design](docs/assets/cli-design.png) shows every command's output on one page ([HTML source](docs/assets/cli-design.html)).</sub>
+
 No `MODEL(...)` headers. No Jinja `{{ ref('...') }}`. No per-model YAML. Dependencies,
 column lineage, and change detection are read from the SQL you already wrote — powered by
 [SQLGlot](https://github.com/tobymao/sqlglot), the parser underneath the ecosystem's
@@ -385,6 +387,7 @@ catalog:
 - [jaffle shop on Reble](https://github.com/satya1395/jaffle-shop-classic) — dbt's example ported, live branch-per-PR, dbt→reble FAQ
 - [Architecture](docs/architecture.md)
 - [Getting started](docs/getting-started.md)
+- [CLI output design](docs/assets/cli-design.png) — every command's output, one page (the v0.1 formatting target)
 - [Validated spikes](spikes/) — reproducible proof the core primitives work today
 
 ## Contributing

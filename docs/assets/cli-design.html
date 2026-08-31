@@ -1,0 +1,84 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#e9ecf2; font-family:-apple-system,Helvetica,sans-serif;
+         padding:26px; width:1500px; }
+  h1 { font-size:20px; color:#1a2440; margin-bottom:4px; }
+  .legend { font-size:13px; color:#5b6478; margin-bottom:18px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .card { background:#15181e; border-radius:10px; overflow:hidden;
+          box-shadow:0 1px 4px rgba(20,30,60,.18); }
+  .bar { background:#232833; padding:7px 13px; font-size:12.5px; color:#9aa3b5;
+         font-family:ui-monospace,'SF Mono',Menlo,monospace; }
+  pre { padding:13px 15px 15px; font:13px/1.62 ui-monospace,'SF Mono',Menlo,monospace;
+        color:#d6dae2; white-space:pre; }
+  .br  { color:#4dd0e1; font-weight:700; }        /* branch: cyan bold */
+  .gl  { color:#4dd0e1; }                          /* glyph */
+  .tb  { color:#eceff4; font-weight:700; }         /* table names */
+  .add { color:#66d17a; }                          /* + green */
+  .rem { color:#ef7a70; }                          /* - red */
+  .chg { color:#e5c07b; }                          /* ~ yellow */
+  .dim { color:#7c8494; }                          /* secondary */
+  .ok  { color:#66d17a; font-weight:700; }
+  .wr  { color:#e5c07b; }
+  .er  { color:#ef7a70; font-weight:700; }
+  .num { color:#d6dae2; }
+</style></head><body>
+<h1>reble CLI output design</h1>
+<div class="legend">Every command opens with a <b>⎇ branch context line</b> · cyan = branch · bold = table · <span style="color:#3f9d54">+added</span> <span style="color:#c0392b">−removed</span> <span style="color:#b8860b">~changed</span> · dim = secondary · aligned gutters</div>
+<div class="grid">
+
+<div class="card"><div class="bar">$ reble status</div><pre><span class="gl">⎇</span> <span class="br">fix-clv-returns</span>
+  <span class="dim">created</span>   2026-09-01 09:14 <span class="dim">· ttl 14d</span>
+  <span class="dim">writable</span>  <span class="tb">jaffle.customers</span>
+  <span class="dim">pinned</span>    jaffle.stg_customers, jaffle.stg_orders <span class="dim">+4 more, frozen at epoch</span></pre></div>
+
+<div class="card"><div class="bar">$ reble branch create fix-clv-returns</div><pre><span class="gl">⎇</span> <span class="br">main</span> <span class="dim">→</span> <span class="br">fix-clv-returns</span>
+  <span class="dim">scope</span>  <span class="tb">jaffle.customers</span>                    <span class="dim">inferred from your changes</span>
+  <span class="dim">pins</span>   raw.orders, jaffle.stg_orders <span class="dim">+4     upstream inputs, frozen now</span>
+<span class="ok">✓</span> switched to <span class="br">fix-clv-returns</span></pre></div>
+
+<div class="card"><div class="bar">$ reble branch create explore   <span style="color:#6b7383">(branch-first, clean tree)</span></div><pre><span class="gl">⎇</span> <span class="br">main</span> <span class="dim">→</span> <span class="br">explore</span>
+  <span class="dim">scope</span>  <span class="dim">open — grows when you edit models and run</span>
+  <span class="dim">reads</span>  <span class="dim">every table frozen as of now (the branch epoch)</span>
+<span class="ok">✓</span> switched to <span class="br">explore</span></pre></div>
+
+<div class="card"><div class="bar">$ reble branch list</div><pre>  <span class="gl">⎇</span> main
+<span class="ok">●</span> <span class="gl">⎇</span> <span class="br">fix-clv-returns</span>   <span class="dim">1 table · created 2h ago</span>
+  <span class="gl">⎇</span> explore           <span class="dim">open scope · created 10m ago</span></pre></div>
+
+<div class="card"><div class="bar">$ reble run</div><pre><span class="gl">⎇</span> <span class="br">fix-clv-returns</span>
+  <span class="dim">changed</span>    <span class="tb">jaffle.customers</span>
+  <span class="dim">published</span>  <span class="tb">jaffle.customers</span> <span class="dim">→ branch ref</span>
+<span class="ok">✓</span> 1 model in 0.4s</pre></div>
+
+<div class="card"><div class="bar">$ reble run   <span style="color:#6b7383">(guard fires)</span></div><pre><span class="gl">⎇</span> <span class="br">narrow</span>
+  <span class="dim">changed</span>    <span class="tb">jaffle.stg_orders</span>, <span class="tb">jaffle.customers</span>
+  <span class="dim">published</span>  <span class="tb">jaffle.customers</span> <span class="dim">→ branch ref</span>
+<span class="wr">⚠</span> <span class="tb">jaffle.stg_orders</span> changed but is outside this branch's scope <span class="dim">— not published</span>
+  <span class="dim">add it to the scope, or rethink the change</span></pre></div>
+
+<div class="card"><div class="bar">$ reble diff</div><pre><span class="gl">⎇</span> <span class="br">fix-clv-returns</span> <span class="dim">vs base</span>
+
+  <span class="tb">jaffle.customers</span>            <span class="dim">100 → 100 rows · key customer_id</span>
+    <span class="chg">~6 changed</span>
+
+  <span class="tb">jaffle.fct_revenue</span>          <span class="dim">730 → 730 rows</span>
+    <span class="add">+20 added</span>  <span class="rem">−20 removed</span>   <span class="dim">no unique key: changes count as +/− pairs</span>
+
+  <span class="tb">jaffle.mart_retention</span>       <span class="dim">new table — profile</span>
+    <span class="dim">rows</span> 52   <span class="dim">cols</span> cohort_week date · customers int64 · retained_w4 double <span class="chg">3 nulls</span></pre></div>
+
+<div class="card"><div class="bar">$ reble promote</div><pre><span class="gl">⎇</span> <span class="br">fix-clv-returns</span> <span class="dim">→</span> <span class="br">main</span>
+  <span class="ok">✓</span> <span class="tb">jaffle.customers</span>
+<span class="wr">⚠</span> pinned input raw.orders advanced on main while you worked <span class="dim">— results used the older snapshot</span>
+<span class="ok">✓</span> promoted <span class="dim">· branch deleted ·</span> on <span class="br">main</span></pre></div>
+
+<div class="card"><div class="bar">$ reble load raw.orders seeds/orders.csv</div><pre><span class="gl">⎇</span> <span class="br">main</span>
+<span class="ok">✓</span> 300 rows <span class="dim">→</span> <span class="tb">raw.orders</span> <span class="dim">(append)</span></pre></div>
+
+<div class="card"><div class="bar">$ reble diff   <span style="color:#6b7383">(error: on main)</span></div><pre><span class="er">✗</span> on <span class="br">main</span> — nothing to diff
+  <span class="dim">→ switch to a branch first:</span>  reble branch list</pre></div>
+
+</div></body></html>
