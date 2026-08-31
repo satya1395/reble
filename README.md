@@ -10,6 +10,9 @@ warehouse and branch-per-PR CI for data pipelines.
 > not written yet. Star the repo to follow along; feedback on the design is the most
 > valuable contribution right now — open a Discussion.
 
+**→ [Why Reble exists](docs/why.md)** — the full story: the four gaps in data
+engineering workflows, why existing tools don't close them, and why now.
+
 ## The idea
 
 Testing a data pipeline change today means cloning or rebuilding an entire dev
@@ -64,8 +67,10 @@ mode (S3/MinIO + Postgres or REST catalog) via config.
 
 ## Design docs
 
+- [Why Reble exists](docs/why.md) — motivation and positioning
 - [Architecture & implementation plan](docs/architecture.md)
 - [Getting started](docs/getting-started.md) *(will be real once code exists)*
+- [Validated spikes](spikes/) — reproducible proof the core primitives work today
 
 ## Contributing
 
