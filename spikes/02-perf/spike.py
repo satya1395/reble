@@ -1,8 +1,8 @@
-"""Spike 2 (scaled): performance of the Reble compute path at ~2GB.
+"""Spike 2: performance of the Reble compute path.
 
-NOTE: designed for 10GB, scaled to ~20M rows (~2GB logical) because the host
-machine had only 5GB free disk at run time. Numbers extrapolate roughly linearly;
-re-run at full size on a machine with headroom (or CI) before freezing N3.
+Usage: spike.py [BATCHES]   (default 4 ≈ 1.5GB quick run; 28 ≈ 10GB full run)
+Validated at both scales on 2026-08-30 — see RESULTS.md. Needs ~2x the target
+size in free disk (Parquet + DuckDB temp); cleans up after itself.
 
 Measures:
   1. Bulk append throughput (DuckDB-generated Arrow -> pyiceberg parquet commit)
@@ -27,7 +27,7 @@ from pyiceberg.catalog import load_catalog
 
 HERE = Path(__file__).parent
 WH = HERE / "warehouse"
-BATCHES = 4
+BATCHES = int(sys.argv[1]) if len(sys.argv) > 1 else 4   # 28 ≈ 10GB in Arrow
 ROWS_PER_BATCH = 5_000_000
 
 
@@ -68,14 +68,14 @@ def main() -> int:
         tbl.append(batch)
         print(f"  batch {i+1}/{BATCHES}: {ROWS_PER_BATCH:,} rows appended "
               f"in {time.time()-bt:.1f}s", flush=True)
-    t["1. bulk load (4x5M rows)"] = time.time() - t0
+    t[f"1. bulk load ({BATCHES}x5M rows)"] = time.time() - t0
     total_rows = BATCHES * ROWS_PER_BATCH
 
     # --- 2. branch creation (zero-copy claim) ---
     s1 = tbl.current_snapshot().snapshot_id
     t0 = time.time()
     tbl.manage_snapshots().create_branch(s1, "pr-1").commit()
-    t["2. branch create on 20M-row table"] = time.time() - t0
+    t[f"2. branch create on {total_rows//1_000_000}M-row table"] = time.time() - t0
 
     # --- 3. pinned full scan -> Arrow ---
     t0 = time.time()
@@ -97,7 +97,10 @@ def main() -> int:
     con.register("orders", full)
     t0 = time.time()
     con.execute("SELECT status, count(*), sum(amount) FROM orders GROUP BY status").fetchall()
-    t["5. group-by agg over 20M rows (DuckDB)"] = time.time() - t0
+    t[f"5. group-by agg over {total_rows//1_000_000}M rows (DuckDB)"] = time.time() - t0
+
+    con.unregister("orders")
+    del full, proj   # release before diff so peak RSS reflects the real diff path
 
     # --- 6. branch write (1 batch onto the branch ref) ---
     upd = gen_batch(gen, BATCHES * ROWS_PER_BATCH)

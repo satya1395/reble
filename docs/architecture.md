@@ -170,13 +170,13 @@ The plan is contingent on these. Do not scaffold the product first.
       remove_branch, DuckDB reads via Arrow. See
       `spikes/01-pyiceberg-branches/RESULTS.md`. Note: no native fast-forward — the
       clean/dirty promote check is ours to implement (as planned).
-- [x] **Spike: compute-path performance. ✅ GREEN (2026-08-30, scaled).** At 20M
-      rows/~1.5GB on an M4 Pro: pinned full scan 0.33s, projected scan 0.03s, branch
-      create <10ms (zero-copy verified at size), full diff 0.64s, appends ~7M rows/s.
-      See `spikes/02-perf/RESULTS.md`. Finding: at 10GB the constraint is RAM, not
-      time → design rule: lineage-driven projection pushdown on every scan; diff on
-      key+compared columns only. Re-run at full 10GB in CI before freezing N3
-      (host disk was 99% full; scaled run only).
+- [x] **Spike: compute-path performance. ✅ GREEN at full 10GB (2026-08-30).**
+      140M rows / 10.22GB Arrow on an M4 Pro: branch create <10ms (size-independent),
+      pinned full scan 4.0s, full diff 5.9s, peak RSS 12.3GB, bulk load ~3.5M rows/s.
+      N3 is now measured, not extrapolated. See `spikes/02-perf/RESULTS.md`.
+      Design rules: lineage-driven projection pushdown on every scan; diff on
+      key+compared columns only; DuckDB memory_limit + temp spill; release Arrow refs
+      promptly.
 - [x] **Spike: SQLMesh embedding. ✅ GREEN (2026-08-30).** sqlmesh 0.236.1 drives
       fully from Python: `Context.plan(auto_apply, no_prompts)`, programmatic dev
       environments, `lineage()` column graphs, plan-native change detection, and
