@@ -40,6 +40,26 @@ reble promote                           # apply to main, clean up
 - **No merge, ever** — branches are ephemeral: create, test, promote (fast-forward or
   re-run) or discard. We refuse to build last-write-wins data merges.
 
+## Measured, not promised
+
+The design is validated by reproducible spikes in [`spikes/`](spikes/), including a
+full-scale performance run — **140M rows / 10.22GB** on an Apple M4 Pro laptop
+(pyiceberg 0.11.1, DuckDB 1.5.5):
+
+| Operation at 10GB scale | Time |
+|---|---|
+| Create a branch of the 140M-row table | **< 10ms** (zero-copy, size-independent) |
+| Pinned full-table scan → Arrow | 4.0s |
+| Projected scan (2 of 6 columns) | 0.47s |
+| Full diff — both refs scanned, added + changed rows | **5.9s** |
+| Branch append (5M rows) | 1.3s |
+| Bulk load throughput | ~3.5M rows/s |
+
+Peak RAM 12.3GB, 3.5GB on disk (Parquet ≈ 2.9× compression). Details and the scripts
+to reproduce: [spike 1 — branch lifecycle](spikes/01-pyiceberg-branches/RESULTS.md) ·
+[spike 2 — performance](spikes/02-perf/RESULTS.md) ·
+[spike 3 — SQLMesh embedding](spikes/03-sqlmesh-embedding/RESULTS.md).
+
 ## The killer workflow: branch-per-PR
 
 A GitHub Action that, on every pull request:
