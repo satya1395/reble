@@ -6,9 +6,10 @@ Reble is a single CLI that gives a small data team a complete local-first analyt
 platform — DuckDB + Apache Iceberg + SQLMesh pre-wired — with subset branching of the
 warehouse and branch-per-PR CI for data pipelines.
 
-> ⚠️ **Status: design phase / pre-alpha.** The architecture is documented, the code is
-> not written yet. Star the repo to follow along; feedback on the design is the most
-> valuable contribution right now — open a Discussion.
+> ⚠️ **Status: pre-alpha, but real.** The full loop works today — `init → run →
+> branch → run → diff → promote`, both git orders, with 25 passing tests — from
+> source install only (no PyPI release yet). Feedback is the most valuable
+> contribution — open a Discussion.
 
 **→ [Why Reble exists](docs/why.md)** — the full story: the four gaps in data
 engineering workflows, why existing tools don't close them, and why now.
@@ -96,7 +97,7 @@ mode (S3/MinIO + Postgres or REST catalog) via config.
 
 - [Why Reble exists](docs/why.md) — motivation and positioning
 - [Architecture & implementation plan](docs/architecture.md)
-- [Getting started](docs/getting-started.md) *(will be real once code exists)*
+- [Getting started](docs/getting-started.md)
 - [Validated spikes](spikes/) — reproducible proof the core primitives work today
 
 ## Contributing

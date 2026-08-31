@@ -14,9 +14,9 @@ work at target scale, see the reproducible [spikes](../spikes/).
 ```
 $ reble init my-warehouse        # scaffold project (SQLMesh models, config, local catalog)
 $ reble run                      # run models against main
-$ reble branch create fix-orders --tables orders,order_totals
+$ reble branch create fix-orders # scope + pins inferred from your edits
 $ reble run                      # runs on branch: writes go to branched refs,
-                                 # reads of other tables hit pinned prod snapshots
+                                 # inputs read prod as of the branch epoch
 $ reble diff                     # schema + row-level diff of branched tables vs main
 $ reble promote                  # apply the change to main; delete branch
 ```

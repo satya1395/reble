@@ -1,12 +1,15 @@
 # Getting Started with Reble
 
-> ⚠️ **Pre-alpha.** These commands describe the intended v0.1 experience; the code is
-> not written yet. See [architecture.md](architecture.md) for the plan.
+> ⚠️ **Pre-alpha.** These commands work today from a source install; there is no
+> PyPI release yet — see the install note below.
 
 ## Install
 
 ```bash
-uv tool install reble    # or: pipx install reble
+# no PyPI release yet — install from source:
+git clone https://github.com/satya1395/reble.git && cd reble
+python3 -m venv .venv && .venv/bin/pip install -e .
+# put .venv/bin/reble on your PATH (symlink or alias)
 ```
 
 No Docker, no services. DuckDB is embedded, Iceberg tables live on your filesystem,
