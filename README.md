@@ -22,12 +22,19 @@ tables you're changing**:
 ```bash
 pip install reble
 reble init my-warehouse
-reble branch create fix-orders          # scoped to the models you changed
+# edit your models…
+reble branch create fix-orders          # scope + pins inferred from your changes —
+                                        # your edited models, their downstream
+                                        # cascade, and their upstream inputs
 reble run                               # writes go to zero-copy Iceberg branch refs;
-                                        # every other table reads prod, snapshot-pinned
-reble diff                              # schema + row-level diff vs main
-reble promote                           # apply to main, clean up
+                                        # inputs read prod as of the branch epoch
+reble diff                              # schema + row-level diff vs your branch base
+reble promote                           # atomic fast-forward to main, clean up
 ```
+
+Both git orders work: edit-first (scope inferred from the diff, shipped) or
+branch-first (empty scope + frozen epoch; scope grows at first run — designed,
+landing next).
 
 - **Zero-copy branches** — branched tables use native Iceberg refs (copy-on-write);
   a branch of a 10GB table costs ~nothing until you write.

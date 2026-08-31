@@ -21,11 +21,16 @@ reble init my-warehouse && cd my-warehouse
 # 2. Build main
 reble run
 
-# 3. Edit a model, then branch just what you're changing
-reble branch create fix-orders --tables analytics.orders,analytics.order_totals
+# 3. Edit a model, then branch — scope and pins are inferred from your changes
+#    (your edited models + their downstream cascade; pins = their upstream inputs).
+#    Both git orders work: branch-first on a clean tree gives you an empty-scope
+#    branch with a frozen epoch, and the scope grows at first `reble run`.
+reble branch create fix-orders
+#   scope (inferred from your changes): analytics.orders, analytics.order_totals
+#   pins  (2): raw.events, raw.customers
 
 # 4. Run on the branch — writes go to zero-copy Iceberg branch refs;
-#    all other tables are read from main, pinned to their current snapshots
+#    pinned tables read main as of the branch epoch, even while prod ingests
 reble run
 
 # 5. See what actually changed

@@ -42,23 +42,43 @@ A branch is **metadata only** — no data is copied:
 
 ```
 branch "pr-123":
+  epoch: 2026-08-30T14:02:11Z     # the branch point — all unscoped reads
+                                  # resolve "as of" this moment
   scope:                          # tables being changed (writable)
     analytics.orders        -> iceberg ref "pr-123"        (copy-on-write)
     analytics.order_totals  -> iceberg ref "pr-123"        (copy-on-write)
-  pins:                           # everything else (read-only, stable)
+  pins:                           # upstream inputs (read-only, frozen at epoch)
     raw.events              -> snapshot 9931
     raw.customers           -> snapshot 4812
-  created_at / created_by / ttl
+  created_by / ttl
 ```
 
 - **Branched tables** use Iceberg's native per-table refs. Writes create new data
   files under the branch ref; the `main` ref never sees them.
-- **Unbranched tables** are read through to prod but **pinned to the snapshot IDs at
-  branch-creation time**, so test inputs are stable and diffs are reproducible even
-  while prod keeps ingesting. Pinning is free (Iceberg time travel).
-- **Scope inference (planned):** derive the scope from the SQLMesh plan (the changed
-  models' output tables), so `reble branch create` needs no arguments in the common
-  case.
+- **Unbranched tables** are read through to prod but **pinned as of the branch
+  epoch** — the moment the branch was created. Test inputs are stable and diffs are
+  reproducible even while prod keeps ingesting, and pinning is free (Iceberg time
+  travel). Pins are **lineage-scoped**: only the transitive upstream inputs of the
+  scoped models are pinned (change 2 models in a 100-model warehouse and you pin
+  their 4 inputs, not 96 tables) — anything else is simply irrelevant to the branch.
+  `--pin-all` forces blanket pinning for warehouses where external writers touch
+  tables SQLMesh can't see.
+- **Scope inference (shipped):** `reble branch create <name>` needs no arguments —
+  the SQLMesh plan supplies the scope (your changed models *plus* their downstream
+  cascade) and the dependency graph supplies the pins. `--tables` remains as an
+  explicit override.
+
+**Both git orders work.** Like git, you can edit first or branch first:
+
+1. *Edit-first* (shipped): change your models, then `reble branch create fix` —
+   the diff against prod tells Reble exactly what to scope and pin.
+2. *Branch-first* (designed, next up): `reble branch create fix` on a clean tree
+   creates the branch with an **empty scope and a frozen epoch**. Edit models, then
+   `reble run` — the plan reveals what changed, and the scope **grows lazily at run
+   time**: refs are created for the changed tables *from their epoch snapshots* (not
+   current main), so a branch created Monday and first run Wednesday still computes
+   against Monday's inputs. Strict epoch reproducibility is the contract — the
+   branch point is when you branched, exactly as in git.
 
 **Promote ≠ merge.**
 1. If the branched tables' `main` refs haven't advanced since branch creation →
