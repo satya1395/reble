@@ -351,6 +351,22 @@ you try Reble in about ten minutes, run its test suite, or run a solo project.
 Postgres or REST catalog** — because that's where real warehouses live. Your laptop
 (or a CI runner) stays the query engine.
 
+**The team flow is the dbt flow.** Edit SQL on a git branch, `reble run` locally
+(the data branch appears, inputs frozen), open a PR (the bot posts the row-level
+diff), merge — and a prod job runs `reble run` on main, rebuilding exactly the
+changed models against current inputs. Nobody types `promote` on a team:
+promote is the solo shortcut for publishing an already-computed branch when you
+*are* your own prod job.
+
+Where this is headed (design settled, [spike-validated](spikes/07-local-overlay/RESULTS.md),
+wiring on the roadmap): **branches are local, main is remote — exactly like git.**
+Developers hold read-only credentials to the shared bucket; their data branches
+live on their own machines as zero-copy overlays of pinned prod snapshots
+(measured: branching a remote 1M-row table locally takes 6ms and copies
+nothing, and local writes leave the shared warehouse bit-identical). The only
+identity that can write shared main is the merge gate. "Individuals can't touch
+prod" becomes an IAM property, not a convention.
+
 ![Query flow: the reble CLI on your laptop or a CI runner runs SQLGlot, pyiceberg and embedded DuckDB; it GETs Iceberg metadata and only the needed column chunks from your S3 bucket, computes locally in RAM, and PUTs results back as a branch-ref commit. No database server anywhere.](docs/assets/query-flow.png)
 
 *"Local compute" does not mean copying the warehouse.* There is no database
@@ -399,12 +415,14 @@ order (opinions welcome in Discussions):
 
 - **`reble branch refresh`** — re-pin a long-lived branch's inputs to now and
   rerun, so a two-week-old branch can catch up to today's data before promote.
-- **Merge-driven promote** — on PR merge, CI promotes the data branch and the
-  bot comments what landed on main. Code merges first, data promotes second,
-  enforced.
-- **Team mode with zero servers** — shared branch state over a shared catalog;
-  AWS S3 Tables (managed Iceberg with a REST catalog) is a candidate that would
-  mean nothing to host at all.
+- **Team mode: local branches, remote main** — developers get read-only bucket
+  credentials and branch locally as zero-copy overlays of pinned prod snapshots
+  ([spike-validated](spikes/07-local-overlay/RESULTS.md): 6ms, nothing copied,
+  shared warehouse untouched by local writes); only the merge gate writes main.
+  AWS S3 Tables (managed Iceberg with a REST catalog) is a candidate shared
+  catalog that would mean nothing to host at all.
+- **Merge-driven promote** — later, as a pure optimization: skip recomputing an
+  expensive model in the prod run when its inputs haven't moved.
 - **Incremental models** (v0.2) — a couple of lines in `reble.yml`, never
   per-model boilerplate.
 - **dbt/SQLMesh importers** — `{{ ref('...') }}` and `MODEL(...)` translation
