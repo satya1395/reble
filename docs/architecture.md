@@ -185,6 +185,32 @@ single-user) and promote sequentially:
 └────────────────────────────────────────────────────────────┘
 ```
 
+### Query flow in team mode (where the engine lives)
+
+The query engine is **DuckDB, embedded as a library inside the `reble`
+process** — on whatever machine runs the CLI. It is not a service; S3 is pure
+storage and never executes anything. On `reble run` against `s3://`:
+
+1. **Metadata first (KBs):** pyiceberg GETs the Iceberg metadata + manifests,
+   learning exactly which Parquet files/row-groups belong to the pinned
+   snapshot each read resolves to — pins cost nothing because choosing a
+   snapshot is choosing a file list.
+2. **Data, surgically:** ranged GETs for only the column chunks the model's
+   SQL references (Parquet is columnar; the lineage-driven projection rule
+   applies on the network, not just RAM) → Arrow batches in process memory.
+3. **Compute on the local CPU:** DuckDB executes the SQL over those buffers
+   in-process.
+4. **Write-back:** results land as new Parquet in the bucket plus a tiny
+   metadata commit moving the *branch ref*. Promote is another pointer move.
+5. **The process exits.** Nothing persists locally except the small branch
+   manifest state. Any machine with the CLI and bucket credentials is a full
+   query engine for exactly as long as it needs to be — which is why CI
+   runners work as team compute.
+
+The contrast with a hosted warehouse: the identical steps happen there too,
+inside the vendor's VPC on the vendor's metered compute. Reble deletes the
+middle tier — same physics, no meter.
+
 ### Load-bearing design decisions
 
 **Language: Python.** SQLGlot, pyiceberg, and DuckDB all live natively in Python;
