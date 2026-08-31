@@ -111,6 +111,29 @@ defines table `demo.orders`, full stop. SQLGlot parses each file once and suppli
   and keyword case don't count) composed with upstream fingerprints, so a change to
   a model re-runs it and its downstream cascade, and nothing else.
 
+**Model configuration (the "no YAML" fine print).** The claim is *zero boilerplate
+per model*, not "no configuration exists": a model with no config entry is a FULL
+rebuild, always — no registration required. Models that need non-default behavior
+(incremental materializations, v0.2) get a few lines in the **one `reble.yml` the
+project already has** — never a per-model sidecar, never a header in the SQL:
+
+```yaml
+# reble.yml
+models:                        # only the exceptions live here
+  demo.events:
+    kind: incremental
+    time_column: event_ts
+  demo.big_fact:
+    kind: incremental
+    unique_key: order_id       # upsert semantics via pyiceberg
+```
+
+Two rules keep this from rotting: (1) **config is validated against the AST** — if
+`time_column: event_ts` names a column the model's SQL never references, that's a
+loud plan-time error, so config can't silently drift from the SQL; (2) magic-comment
+pragmas are deliberately rejected — comment-config fails silently on typos and is a
+header in disguise.
+
 There is deliberately no second environment system: Iceberg branch refs are the one
 and only isolation layer, for model outputs and raw tables alike.
 

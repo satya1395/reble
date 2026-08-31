@@ -88,7 +88,7 @@ neither Slim CI nor manual clone discipline gives you structurally.
 - **The transform stack is being reevaluated.** dbt's Fusion transition and licensing
   turbulence pushed many teams to reassess for the first time in years. Reble's answer
   is deliberately minimal: **your models are just SQL files** — no headers, no Jinja,
-  no YAML — with dependencies and lineage inferred by
+  no per-model YAML — with dependencies and lineage inferred by
   [SQLGlot](https://github.com/tobymao/sqlglot), the same parser foundation the
   ecosystem's transform and lineage tools are built on. Importers for dbt
   (`{{ ref('...') }}`) and SQLMesh (`MODEL(...)`) projects are on the roadmap, so

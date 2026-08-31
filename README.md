@@ -7,10 +7,12 @@
 SELECT id, amount FROM raw.orders WHERE amount > 0
 ```
 
-No `MODEL(...)` headers. No Jinja `{{ ref('...') }}`. No YAML. Dependencies, column
-lineage, and change detection are read from the SQL you already wrote — powered by
+No `MODEL(...)` headers. No Jinja `{{ ref('...') }}`. No per-model YAML. Dependencies,
+column lineage, and change detection are read from the SQL you already wrote — powered by
 [SQLGlot](https://github.com/tobymao/sqlglot), the parser underneath the ecosystem's
-lineage tooling.
+lineage tooling. A model with no config is a FULL rebuild; the few models that need
+more (incremental, in v0.2) get a couple of lines in the one `reble.yml` the project
+already has — never boilerplate per model.
 
 Reble is a single CLI that gives a small data team a complete local-first analytics
 platform — DuckDB + Apache Iceberg + SQLGlot-powered transforms, pre-wired — with
