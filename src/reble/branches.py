@@ -253,6 +253,22 @@ class BranchEngine:
         snap = self._snapshot_as_of(table, m.created_at)
         return snap if snap is not None else EPOCH_EMPTY
 
+    def _align_schema(self, tbl, df: pa.Table):
+        """FULL-model overwrites own the table's schema: when a model's output
+        columns change, evolve the Iceberg schema to match (add new columns,
+        drop removed ones) before writing. Known limitation: Iceberg schemas
+        are table-level, not per-ref, so a branch's schema change is visible
+        as the table's current schema before promote (data stays isolated)."""
+        current = {f.name for f in tbl.schema().fields}
+        new = set(df.schema.names)
+        if current == new:
+            return tbl
+        with tbl.update_schema(allow_incompatible_changes=True) as upd:
+            upd.union_by_name(df.schema)
+            for name in current - new:
+                upd.delete_column(name)
+        return self.catalog.load_table(".".join(tbl.name()[-2:]))
+
     # -- guarded writes --------------------------------------------------------
     def write(self, table: str, df: pa.Table, mode: str = "append") -> None:
         """Write `df` to `table`, routed and guarded by the current branch.
@@ -304,6 +320,7 @@ class BranchEngine:
                 self.state.update_base(m.name, table, seeded.snapshot_id)
                 tbl = self.catalog.load_table(table)
         if mode == "overwrite":
+            tbl = self._align_schema(tbl, df)
             with _quiet_overwrite():
                 tbl.overwrite(df, branch=m.name)
         else:
@@ -317,6 +334,7 @@ class BranchEngine:
             self.catalog.create_namespace_if_not_exists(ns)
             tbl = self.catalog.create_table(table, schema=df.schema)
         if mode == "overwrite":
+            tbl = self._align_schema(tbl, df)
             with _quiet_overwrite():
                 tbl.overwrite(df)
         else:

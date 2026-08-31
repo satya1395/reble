@@ -85,3 +85,22 @@ def test_fresh_clone_creates_warehouse_dir(tmp_path):
     e = BranchEngine(cfg)
     e.write("demo.x", t(0, 1))
     assert (tmp_path / "warehouse" / "catalog.db").exists()
+
+
+def test_overwrite_evolves_schema(eng):
+    """Regression: editing a model to change its OUTPUT COLUMNS must work.
+    Found live: the S3 vision run changed a model's columns and overwrite
+    failed with 'PyArrow table contains more columns'."""
+    new = pa.table({"status": pa.array(["a", "b"], pa.string()),
+                    "revenue": pa.array([1.0, 2.0], pa.float64())})
+    eng.write("demo.orders", new, mode="overwrite")           # main, new schema
+    got = eng.catalog.load_table("demo.orders").scan().to_arrow()
+    assert set(got.column_names) == {"status", "revenue"}     # old 'id' gone
+
+    eng.create("dev", ["demo.orders"])
+    newer = pa.table({"status": pa.array(["x"], pa.string()),
+                      "n": pa.array([1], pa.int64())})
+    eng.write("demo.orders", newer, mode="overwrite")         # branch, new schema
+    tbl = eng.catalog.load_table("demo.orders")
+    b = tbl.scan(snapshot_id=tbl.metadata.refs["dev"].snapshot_id).to_arrow()
+    assert set(b.column_names) >= {"status", "n"}
