@@ -128,15 +128,17 @@ class BranchEngine:
         return None  # table created on main after branching; read current
 
     # -- guarded writes --------------------------------------------------------
-    def write(self, table: str, df: pa.Table) -> None:
-        """Append `df` to `table`, routed and guarded by the current branch.
+    def write(self, table: str, df: pa.Table, mode: str = "append") -> None:
+        """Write `df` to `table`, routed and guarded by the current branch.
 
-        On main: plain append. On a branch: table must be in scope; the append
-        lands on the branch ref (creating table and/or ref if needed).
+        mode: "append" adds rows; "overwrite" replaces the table's contents
+        (model outputs use overwrite). On main: plain write. On a branch: table
+        must be in scope; the write lands on the branch ref (creating table
+        and/or ref if needed).
         """
         m = self.current()
         if m is None:
-            self._append_main(table, df)
+            self._write_main(table, df, mode)
             return
         if table not in m.scope:
             raise WriteGuardError(
@@ -160,13 +162,19 @@ class BranchEngine:
                 snap = tbl.current_snapshot()
             tbl.manage_snapshots().create_branch(snap.snapshot_id, m.name).commit()
             tbl = self.catalog.load_table(table)
-        tbl.append(df, branch=m.name)
+        if mode == "overwrite":
+            tbl.overwrite(df, branch=m.name)
+        else:
+            tbl.append(df, branch=m.name)
 
-    def _append_main(self, table: str, df: pa.Table) -> None:
+    def _write_main(self, table: str, df: pa.Table, mode: str = "append") -> None:
         try:
             tbl = self.catalog.load_table(table)
         except NoSuchTableError:
             ns = table.rsplit(".", 1)[0]
             self.catalog.create_namespace_if_not_exists(ns)
             tbl = self.catalog.create_table(table, schema=df.schema)
-        tbl.append(df)
+        if mode == "overwrite":
+            tbl.overwrite(df)
+        else:
+            tbl.append(df)

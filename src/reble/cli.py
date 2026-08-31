@@ -61,6 +61,30 @@ def status():
     click.echo(f"  pins  ({len(m.pins)} read-only tables frozen at branch creation)")
 
 
+@cli.command()
+def run():
+    """Run models on the current branch (SQLMesh plan/apply + publish to Iceberg)."""
+    from reble.config import load_config
+    from reble.runner import run as _run
+    try:
+        cfg = load_config()
+        from reble.branches import BranchEngine
+        res = _run(cfg, BranchEngine(cfg))
+    except RebleError as e:
+        _fail(e)
+    click.echo(f"Environment: {res.environment}")
+    if res.mirrored:
+        click.echo(f"  mirrored inputs : {', '.join(res.mirrored)}")
+    click.echo(f"  models changed  : {', '.join(res.changed) or '(none)'}")
+    click.echo(f"  published       : {', '.join(res.published) or '(none)'}")
+    for tbl in res.guard_skipped:
+        click.secho(
+            f"  guard: {tbl} changed but is NOT in this branch's scope — "
+            "not published. Add it to the scope or rethink the change.",
+            fg="yellow",
+        )
+
+
 @cli.group()
 def branch():
     """Create, list, switch, and delete warehouse branches."""

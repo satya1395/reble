@@ -17,7 +17,7 @@ gateways:
   local:
     connection:
       type: duckdb
-      database: .reble/sqlmesh.db
+      database: .reble/db.db
 
 default_gateway: local
 
@@ -35,6 +35,16 @@ MODEL (
 SELECT 1 AS id, 'hello reble' AS message
 """
 
+_EXAMPLE_SUMMARY = """\
+MODEL (
+  name demo.example_summary,
+  kind FULL
+);
+
+SELECT COUNT(*) AS n, MAX(message) AS last_message
+FROM demo.example
+"""
+
 _GITIGNORE = """\
 .reble/
 warehouse/
@@ -50,6 +60,7 @@ def scaffold(target: Path) -> Path:
     (target / "reble.yml").write_text(_REBLE_YML)
     (target / "config.yaml").write_text(_SQLMESH_CONFIG)
     (target / "models" / "example.sql").write_text(_EXAMPLE_MODEL)
+    (target / "models" / "example_summary.sql").write_text(_EXAMPLE_SUMMARY)
     gi = target / ".gitignore"
     if not gi.exists():
         gi.write_text(_GITIGNORE)
