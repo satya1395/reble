@@ -332,9 +332,11 @@ Postgres or REST catalog** — because that's where real warehouses live. Your l
 (or a CI runner) stays the query engine. The branch machinery doesn't change:
 branches and pins are *catalog metadata*, so branching a 500GB table in S3 is the
 same instant, zero-copy operation as locally — only scan latency differs, and
-lineage-driven column pruning is the mitigation. (Honest status: team mode is
-config-complete but not yet benchmarked — S3 numbers will be published like the
-local ones were, measured first.)
+lineage-driven column pruning is the mitigation. (Honest status: the full loop is
+[validated over MinIO and real AWS S3](spikes/06-s3-team-mode/RESULTS.md) —
+per-op latency lands in the hundreds-of-ms band on real S3, fine for
+interactive use. Still open: shared-catalog concurrency and large-scan S3
+throughput — unmeasured means unclaimed.)
 
 ```yaml
 # reble.yml — the entire difference between modes
