@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reble"
+version = "0.0.1"
+description = "Branch your warehouse like you branch your code — local-first analytics on DuckDB + Iceberg + SQLMesh"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+authors = [{ name = "Reble contributors" }]
+dependencies = [
+    # exact pins: spikes double as upgrade regression tests (see spikes/*/RESULTS.md)
+    "pyiceberg[sql-sqlite,pyarrow]==0.11.1",
+    "duckdb==1.5.5",
+    "sqlmesh==0.236.1",
+    "click>=8.1",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+reble = "reble.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/satya1395/reble"
+
+[tool.setuptools.packages.find]
+where = ["src"]
