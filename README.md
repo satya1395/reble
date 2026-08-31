@@ -337,6 +337,8 @@ you try Reble in about ten minutes, run its test suite, or run a solo project.
 Postgres or REST catalog** — because that's where real warehouses live. Your laptop
 (or a CI runner) stays the query engine.
 
+![Query flow: the reble CLI on your laptop or a CI runner runs SQLGlot, pyiceberg and embedded DuckDB; it GETs Iceberg metadata and only the needed column chunks from your S3 bucket, computes locally in RAM, and PUTs results back as a branch-ref commit. No database server anywhere.](docs/assets/query-flow.png)
+
 *"Local compute" does not mean copying the warehouse.* There is no database
 server anywhere: the warehouse is Parquet files in Iceberg layout, and the
 query engine (DuckDB) lives inside the CLI. Each `reble run` reads **just what
