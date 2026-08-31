@@ -164,21 +164,28 @@ def status(as_json: bool):
     if m is None:
         branches = [b.name for b in eng.state.list()]
         follow = branchable_name(gi) if cfg.git_sync else None
+        pending = _pending_edits(cfg, eng, MAIN)
         if as_json:
             click.echo(json.dumps({
                 "branch": "main", "git_branch": gi.branch if gi else None,
                 "git_sha": gi.sha if gi else None,
                 "git_dirty": gi.dirty if gi else False,
+                "edited_not_run": pending,
                 "branches": branches}))
             return
         _ctx("main")
         if follow:
-            click.echo(_gut("git") + _dim(
-                f"{follow} — no data branch yet; `reble run` will create it"))
+            if pending:
+                click.echo(_gut("git") + _dim(
+                    f"{follow} — edits detected; `reble run` will branch and "
+                    "run them"))
+            else:
+                click.echo(_gut("git") + _dim(
+                    f"{follow} — in sync with main, nothing to branch"))
         if branches:
             click.echo(_gut("branches") + ", ".join(_br(b) for b in branches))
         else:
-            click.echo(_gut("branches") + _dim("(none yet)"))
+            click.echo(_gut("branches") + _dim("(none)"))
         return
 
     pending = _pending_edits(cfg, eng, m.name)
@@ -454,6 +461,10 @@ def promote():
         _warn(f"pinned input {_tb(t)} advanced on main while you worked "
               + _dim("— results used the older snapshot"))
     _ok(f"promoted {_dim('· branch deleted · on')} {_br('main')}")
+    gi = git_info(eng.cfg.project_dir)
+    if gi is not None and gi.branch == res["branch"]:
+        click.echo("  " + _dim(f"your data is on main; git is still on "
+                               f"{res['branch']} — merge or switch when ready"))
 
 
 @cli.command()
