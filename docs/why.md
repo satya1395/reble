@@ -123,4 +123,6 @@ neither Slim CI nor manual clone discipline gives you structurally.
 
 > Reble is an experiment tinkering on one idea: that a warehouse should branch like
 > a codebase. One tool, your bucket, and every pipeline change — new or modified —
-> gets its own cheap, isolated, reviewable branch.
+> gets its own cheap, isolated, reviewable branch. **Any machine with the CLI and
+> bucket credentials is a full query engine** — there is no warehouse server to
+> run, scale, or pay for.

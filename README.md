@@ -5,7 +5,11 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![CLA assistant](https://cla-assistant.io/readme/badge/satya1395/reble)](https://cla-assistant.io/satya1395/reble)
 
-**Your models are just SQL files. Branch your warehouse like you branch your code.**
+**Your models are just SQL files. Your bucket is the warehouse. Any machine
+with the CLI and bucket credentials is a full query engine.**
+
+Branch your warehouse like you branch your code — no warehouse server to run,
+scale, or pay for.
 
 ```sql
 -- models/demo/orders_clean.sql      ← filename = table name. That's the whole format.
@@ -21,10 +25,10 @@ already has — never boilerplate per model.
 
 Reble is a single CLI that gives a small data team a complete analytics platform —
 DuckDB + Apache Iceberg + SQLGlot-powered transforms, pre-wired — with subset
-branching of the warehouse and branch-per-PR CI for data pipelines. **Your laptop is
-the query engine; your bucket is the warehouse**: data lives in S3/GCS (or on local
-disk while you're trying it out), and compute is a single fast node — your machine,
-or a CI runner.
+branching of the warehouse and branch-per-PR CI for data pipelines. Data lives in
+S3/GCS (or on local disk while you're trying it out); the query engine is DuckDB
+embedded in the CLI, so your laptop and your CI runners *are* the compute — for
+exactly as long as a run takes, and never a second of billing after.
 
 > ⚠️ **Status: pre-alpha, but real.** The full loop works today — `init → run →
 > branch → run → diff → promote`, both git orders, with 40 passing tests — from
