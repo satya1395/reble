@@ -66,6 +66,43 @@ def _exists_at(engine: BranchEngine, table: str, manifest) -> bool:
     return manifest.name in tbl.metadata.refs
 
 
+def _register_input(con, engine: BranchEngine, table: str,
+                    produced: dict | None = None) -> None:
+    """Expose `table` to DuckDB as the current branch sees it."""
+    if produced is not None and table in produced:
+        arrow = produced[table]
+    else:
+        snap = engine.resolve_read(table)
+        tbl = engine.catalog.load_table(table)
+        if snap == EPOCH_EMPTY:                     # born after the branch epoch
+            arrow = tbl.scan().to_arrow().schema.empty_table()
+        else:
+            arrow = tbl.scan(snapshot_id=snap).to_arrow()
+    schema, name = table.rsplit(".", 1)
+    con.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+    con.register(f"_v_{schema}_{name}", arrow)
+    con.execute(f'CREATE OR REPLACE VIEW "{schema}"."{name}" '
+                f'AS SELECT * FROM "_v_{schema}_{name}"')
+
+
+def query(cfg: RebleConfig, engine: BranchEngine, sql: str):
+    """Ad-hoc SQL against the warehouse as the CURRENT BRANCH sees it.
+
+    The same adapter the runner uses: referenced tables are registered as
+    views over branch-resolved Iceberg scans (refs for scoped tables, pins/
+    epoch for the rest), then DuckDB executes. Returns (connection, relation);
+    caller displays and closes.
+    """
+    con = duckdb.connect(config={
+        "memory_limit": "12GB",
+        "temp_directory": str(cfg.project_dir / ".reble" / "tmp"),
+    })
+    known = set(engine._all_tables())
+    for t in sorted(deps_of(sql) & known):
+        _register_input(con, engine, t)
+    return con, con.sql(sql)
+
+
 def run(cfg: RebleConfig, engine: BranchEngine, force: bool = False) -> RunResult:
     models = load_models(cfg)
     if not models:
@@ -110,20 +147,7 @@ def run(cfg: RebleConfig, engine: BranchEngine, force: bool = False) -> RunResul
 
             # register this model's inputs as views over branch-resolved reads
             for dep in sorted(deps_of(models[t])):
-                if dep in produced:
-                    arrow = produced[dep]
-                else:
-                    snap = engine.resolve_read(dep)
-                    tbl = engine.catalog.load_table(dep)
-                    if snap == EPOCH_EMPTY:             # born after the epoch
-                        arrow = tbl.scan().to_arrow().schema.empty_table()
-                    else:
-                        arrow = tbl.scan(snapshot_id=snap).to_arrow()
-                schema, name = dep.rsplit(".", 1)
-                con.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
-                con.register(f"_v_{schema}_{name}", arrow)
-                con.execute(f'CREATE OR REPLACE VIEW "{schema}"."{name}" '
-                            f'AS SELECT * FROM "_v_{schema}_{name}"')
+                _register_input(con, engine, dep, produced)
 
             out = con.execute(models[t]).to_arrow_table()
             produced[t] = out

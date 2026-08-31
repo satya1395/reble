@@ -115,6 +115,34 @@ def load(table: str, file: str, overwrite: bool):
                f"({'overwrite' if overwrite else 'append'})")
 
 
+@cli.command("query")
+@click.argument("sql")
+def query_cmd(sql: str):
+    """Run ad-hoc SQL against the warehouse as the current branch sees it.
+
+    Scoped tables read your branch refs; everything else reads its pinned or
+    epoch snapshot. On main you see main. Example:
+
+        reble query "SELECT * FROM demo.example LIMIT 20"
+    """
+    from reble.config import load_config
+    from reble.runner import query as _query
+    try:
+        cfg = load_config()
+        from reble.branches import BranchEngine
+        eng = BranchEngine(cfg)
+        ctx = eng.state.current_branch()
+        con, rel = _query(cfg, eng, sql)
+    except RebleError as e:
+        _fail(e)
+    click.secho(f"\u2387 {ctx}", fg="cyan")
+    try:
+        rel.show(max_rows=40)
+    except TypeError:
+        rel.show()
+    con.close()
+
+
 @cli.command()
 def diff():
     """Show what the current branch changes, per scoped table."""

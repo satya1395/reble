@@ -121,3 +121,26 @@ def test_cli_load_csv(tmp_path):
     from reble.config import load_config
     eng = BranchEngine(load_config(tmp_path / "p"))
     assert eng.catalog.load_table("raw.orders").scan().to_arrow().num_rows == 2
+
+
+def test_query_sees_branch_and_pins(project):
+    from reble.runner import query
+    cfg, eng = project
+    run(cfg, eng)
+    eng.create("q", ["demo.orders_clean"])
+    (cfg.project_dir / "models" / "demo" / "orders_clean.sql").write_text(
+        "SELECT id, amount FROM raw.orders   -- keep negatives\n")
+    run(cfg, eng)
+
+    con, rel = query(cfg, eng, "SELECT count(*) AS n FROM demo.orders_clean")
+    assert rel.fetchall() == [(3,)]                          # branch view
+    con.close()
+
+    eng.switch("main")
+    con, rel = query(cfg, eng, "SELECT count(*) AS n FROM demo.orders_clean")
+    assert rel.fetchall() == [(2,)]                          # main view
+    con.close()
+
+    con, rel = query(cfg, eng, "SELECT 1 + 1")               # no tables: fine
+    assert rel.fetchall() == [(2,)]
+    con.close()
