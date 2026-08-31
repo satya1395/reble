@@ -35,6 +35,9 @@ or a CI runner.
 
 **→ [Why Reble exists](docs/why.md)** — the full story: the four gaps in data
 engineering workflows, why existing tools don't close them, and why now.
+**→ [Coming from dbt?](https://github.com/satya1395/jaffle-shop-classic#coming-from-dbt-the-translation-table)** —
+dbt's own jaffle shop ported to Reble, with the translation table and FAQ
+(short version: *branches replace environments — there's nothing to configure*).
 
 ## The idea
 
@@ -357,6 +360,7 @@ catalog:
 ## Design docs
 
 - [Why Reble exists](docs/why.md) — motivation and positioning
+- [jaffle shop on Reble](https://github.com/satya1395/jaffle-shop-classic) — dbt's example ported, live branch-per-PR, dbt→reble FAQ
 - [Architecture](docs/architecture.md)
 - [Getting started](docs/getting-started.md)
 - [Validated spikes](spikes/) — reproducible proof the core primitives work today
