@@ -12,7 +12,7 @@ No Docker, no services. DuckDB is embedded, Iceberg tables live on your filesyst
 the catalog is SQLite, and transforms run in-process — models are plain SQL files
 (filename = table name), with dependencies inferred from the SQL by SQLGlot.
 
-## First branch in 5 minutes
+## First branch in 10 minutes
 
 ```bash
 # 1. Scaffold a project (models, config, local warehouse, example data)

@@ -325,11 +325,20 @@ port live in the same repo.
 
 **On-ramp (zero services):** everything on your laptop — DuckDB embedded, Iceberg on
 local disk, SQLite catalog, transforms in-process. No Docker, no daemons. This is how
-you try Reble in five minutes, run its test suite, or run a solo project.
+you try Reble in about ten minutes, run its test suite, or run a solo project.
 
 **Production (team mode):** the same project pointed at **S3/GCS + a shared
 Postgres or REST catalog** — because that's where real warehouses live. Your laptop
-(or a CI runner) stays the query engine. The branch machinery doesn't change:
+(or a CI runner) stays the query engine.
+
+*"Local compute" does not mean copying the warehouse.* There is no database
+server anywhere: the warehouse is Parquet files in Iceberg layout, and the
+query engine (DuckDB) lives inside the CLI. Each `reble run` reads **just what
+that run needs** — only the tables your changed models touch, only the columns
+their SQL references, at the pinned snapshots — streams it through memory, and
+writes results back to the bucket. Nothing is replicated, synced, or stored
+locally. It's the same I/O a remote warehouse does internally; the only things
+that moved are where the CPU sits, and who bills you for it. The branch machinery doesn't change:
 branches and pins are *catalog metadata*, so branching a 500GB table in S3 is the
 same instant, zero-copy operation as locally — only scan latency differs, and
 lineage-driven column pruning is the mitigation. (Honest status: the full loop is
