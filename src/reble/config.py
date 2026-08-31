@@ -16,6 +16,10 @@ class RebleConfig:
     warehouse: str = "warehouse"          # path or s3:// URI
     catalog_uri: str = ""                 # empty -> sqlite inside warehouse (local mode)
     default_branch_ttl_days: int = 14
+    catalog_properties: dict = field(default_factory=dict)
+    # passed straight to pyiceberg load_catalog — e.g. s3.endpoint,
+    # s3.access-key-id for MinIO/R2; on AWS the standard credential chain
+    # (env vars, ~/.aws) is picked up automatically and this can stay empty
 
     @property
     def warehouse_path(self) -> str:
@@ -50,7 +54,8 @@ def find_project_dir(start: Path | None = None) -> Path:
 def load_config(project_dir: Path | None = None) -> RebleConfig:
     project_dir = project_dir or find_project_dir()
     raw = yaml.safe_load((project_dir / CONFIG_FILE).read_text()) or {}
-    known = {"warehouse", "catalog_uri", "default_branch_ttl_days"}
+    known = {"warehouse", "catalog_uri", "default_branch_ttl_days",
+             "catalog_properties"}
     unknown = set(raw) - known
     if unknown:
         raise ProjectError(f"unknown keys in {CONFIG_FILE}: {sorted(unknown)}")

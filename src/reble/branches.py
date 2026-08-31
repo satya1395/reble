@@ -44,6 +44,7 @@ def open_catalog(cfg: RebleConfig) -> Catalog:
         type="sql",
         uri=cfg.resolved_catalog_uri,
         warehouse=cfg.warehouse_path,
+        **cfg.catalog_properties,
     )
 
 
