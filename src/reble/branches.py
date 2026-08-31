@@ -64,7 +64,14 @@ class BranchEngine:
         return snap.snapshot_id if snap else None
 
     # -- lifecycle -------------------------------------------------------------
-    def create(self, name: str, scope: list[str]) -> BranchManifest:
+    def create(self, name: str, scope: list[str],
+               pin_tables: list[str] | None = None) -> BranchManifest:
+        """Create a subset branch.
+
+        pin_tables: which tables to pin (lineage-scoped upstream inputs, when the
+        caller knows them). None = pin every non-scoped table — the safe fallback
+        when inputs can't be inferred (raw tables, external writers).
+        """
         if not scope:
             raise BranchError("a branch needs a scope: pass the tables you'll change")
         existing = set(self._all_tables())
@@ -85,8 +92,10 @@ class BranchEngine:
                 # empty table (no snapshot yet): ref is created on first write
             # not in catalog yet: new-model workflow, created on first write
 
+        pinnable = (existing & set(pin_tables)) if pin_tables is not None \
+            else existing - set(scope)
         pins = {
-            t: s for t in existing - set(scope)
+            t: s for t in pinnable
             if (s := self._snapshot_id(t)) is not None
         }
 

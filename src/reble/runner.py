@@ -59,6 +59,45 @@ class RunResult:
     guard_skipped: list[str] = field(default_factory=list)   # changed but out of scope
 
 
+def analyze_project(cfg: RebleConfig) -> tuple[list[str], dict[str, set[str]]]:
+    """What changed vs prod, and the model dependency graph.
+
+    Returns (changed_tables, deps) where changed_tables includes the downstream
+    cascade (SQLMesh plans indirectly-modified models too) and deps maps each
+    model's output table to the tables it reads.
+    """
+    from sqlmesh.core.context import Context
+    with _in_dir(cfg.project_dir), contextlib.closing(
+        Context(paths=[str(cfg.project_dir)])
+    ) as ctx:
+        deps = {
+            _norm(m.name): {_norm(str(d)) for d in getattr(m, "depends_on", set()) or set()}
+            for m in ctx.models.values()
+        }
+        plan = ctx.plan(no_prompts=True, auto_apply=False)
+        changed = sorted({_norm(s.name) for s in plan.new_snapshots})
+    return changed, deps
+
+
+def upstream_closure(scope: list[str], deps: dict[str, set[str]]) -> list[str] | None:
+    """All tables the scoped models transitively read (excluding the scope).
+
+    Returns None when a scoped table isn't a known model — its inputs are
+    unknowable from lineage, so the caller should fall back to pinning
+    everything (safe over clever).
+    """
+    if any(t not in deps for t in scope):
+        return None
+    seen: set[str] = set()
+    stack = list(scope)
+    while stack:
+        for d in deps.get(stack.pop(), ()):
+            if d not in seen and d not in scope:
+                seen.add(d)
+                stack.append(d)
+    return sorted(seen)
+
+
 @contextlib.contextmanager
 def _in_dir(path):
     """SQLMesh resolves its relative duckdb path against cwd, not the project dir."""

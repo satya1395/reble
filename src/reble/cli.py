@@ -113,9 +113,12 @@ def diff():
             for c in d.schema_removed:
                 click.secho(f"    schema: - column {c}", fg="red")
             click.echo(f"    rows: {d.rows_main:,} -> {d.rows_branch:,}")
-            changed = "n/a (no id column)" if d.changed is None else f"{d.changed:,}"
-            click.echo(f"    +{d.added:,} added   -{d.removed:,} removed   "
-                       f"~{changed} changed")
+            line = f"    +{d.added:,} added   -{d.removed:,} removed"
+            if d.changed is not None:
+                line += f"   ~{d.changed:,} changed"
+            else:
+                line += "   (no id column: changed rows count as +/- pairs)"
+            click.echo(line)
         click.echo()
 
 
@@ -145,18 +148,49 @@ def branch():
 
 @branch.command("create")
 @click.argument("name")
-@click.option("--tables", required=True,
-              help="Comma-separated tables this branch will change (namespace.table)")
-def branch_create(name: str, tables: str):
-    """Create a subset branch scoped to TABLES and switch to it."""
-    scope = [t.strip() for t in tables.split(",") if t.strip()]
+@click.option("--tables", default=None,
+              help="Comma-separated tables this branch will change "
+                   "(default: inferred from your edited models via SQLMesh)")
+@click.option("--pin-all", is_flag=True,
+              help="Pin every non-scoped table instead of just the lineage-derived "
+                   "upstream inputs (use when external writers touch tables SQLMesh "
+                   "doesn't know about)")
+def branch_create(name: str, tables: str | None, pin_all: bool):
+    """Create a subset branch and switch to it.
+
+    With no --tables, the scope is inferred from what you changed: edit your
+    models first, then branch — SQLMesh reports the changed models and their
+    downstream cascade, and their upstream inputs become the pins.
+    """
+    from reble.config import load_config
+    from reble.runner import analyze_project, upstream_closure
     try:
+        cfg = load_config()
         eng = _engine()
-        m = eng.create(name, scope)
+        inferred = False
+        if tables:
+            scope = [t.strip() for t in tables.split(",") if t.strip()]
+        else:
+            scope, deps = analyze_project(cfg)
+            inferred = True
+            if not scope:
+                _fail(RebleError(
+                    "no model changes detected vs prod — edit your models first, "
+                    "or pass --tables explicitly"))
+        pin_tables = None
+        if not pin_all:
+            if not inferred:
+                _, deps = analyze_project(cfg)
+            pin_tables = upstream_closure(scope, deps)   # None if uninferrable
+        m = eng.create(name, scope, pin_tables=pin_tables)
     except RebleError as e:
         _fail(e)
-    click.echo(f"Created branch {click.style(name, bold=True)} "
-               f"(scope: {', '.join(m.scope)}; {len(m.pins)} tables pinned)")
+    how = "inferred from your changes" if inferred else "explicit"
+    click.echo(f"Created branch {click.style(name, bold=True)}")
+    click.echo(f"  scope ({how}): {', '.join(m.scope)}")
+    pins = sorted(m.pins)
+    shown = ", ".join(pins[:6]) + (" …" if len(pins) > 6 else "")
+    click.echo(f"  pins  ({len(pins)}): {shown or '(none)'}")
     for other, t in getattr(m, "overlaps", []):
         click.secho(f"  warning: {t} is also scoped by branch {other!r} — "
                     "second promote will require a rebase", fg="yellow")
