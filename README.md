@@ -14,9 +14,12 @@ lineage tooling. A model with no config is a FULL rebuild; the few models that n
 more (incremental, in v0.2) get a couple of lines in the one `reble.yml` the project
 already has — never boilerplate per model.
 
-Reble is a single CLI that gives a small data team a complete local-first analytics
-platform — DuckDB + Apache Iceberg + SQLGlot-powered transforms, pre-wired — with
-subset branching of the warehouse and branch-per-PR CI for data pipelines.
+Reble is a single CLI that gives a small data team a complete analytics platform —
+DuckDB + Apache Iceberg + SQLGlot-powered transforms, pre-wired — with subset
+branching of the warehouse and branch-per-PR CI for data pipelines. **Your laptop is
+the query engine; your bucket is the warehouse**: data lives in S3/GCS (or on local
+disk while you're trying it out), and compute is a single fast node — your machine,
+or a CI runner.
 
 > ⚠️ **Status: pre-alpha, but real.** The full loop works today — `init → run →
 > branch → run → diff → promote`, both git orders, with 25 passing tests — from
@@ -302,11 +305,28 @@ A GitHub Action (coming next) that, on every pull request:
 
 Data PRs become reviewable like code PRs — scenario 1 above, fully automated.
 
-## Local-first, zero services
+## Two modes, one tool
 
-Everything runs on a laptop: DuckDB embedded, Iceberg on local filesystem, SQLite
-catalog, transforms in-process. No Docker, no daemons. The same project moves to team
-mode (S3/MinIO + Postgres or REST catalog) via config.
+**On-ramp (zero services):** everything on your laptop — DuckDB embedded, Iceberg on
+local disk, SQLite catalog, transforms in-process. No Docker, no daemons. This is how
+you try Reble in five minutes, run its test suite, or run a solo project.
+
+**Production (team mode):** the same project pointed at **S3/GCS + a shared
+Postgres or REST catalog** — because that's where real warehouses live. Your laptop
+(or a CI runner) stays the query engine. The branch machinery doesn't change:
+branches and pins are *catalog metadata*, so branching a 500GB table in S3 is the
+same instant, zero-copy operation as locally — only scan latency differs, and
+lineage-driven column pruning is the mitigation. (Honest status: team mode is
+config-complete but not yet benchmarked — S3 numbers will be published like the
+local ones were, measured first.)
+
+```yaml
+# reble.yml — the entire difference between modes
+warehouse: s3://my-bucket/warehouse
+catalog:
+  type: sql
+  uri: postgresql://...
+```
 
 ## What Reble is not
 
@@ -314,7 +334,8 @@ mode (S3/MinIO + Postgres or REST catalog) via config.
   and SQLGlot and adds the branching layer and glue.
 - Not a dbt/SQLMesh replacement you must migrate to all at once — importers
   (`{{ ref('...') }}` and `MODEL(...)` translation) are on the roadmap.
-- Not a Snowflake competitor — the target is small teams and the local/CI loop.
+- Not a Snowflake competitor — the target is small teams; compute is one fast node
+  (your laptop or a CI runner) over data in your bucket, not a cluster.
 - Not a full-catalog branching system (see Nessie/lakeFS for that) — Reble branches
   subsets over standard Iceberg catalogs, no migration required.
 

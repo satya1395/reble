@@ -48,7 +48,10 @@ without branching at all.
 ## What Reble does about it
 
 Reble is a single CLI that ships that stack pre-wired, and adds the missing
-primitive: **subset branching**.
+primitive: **subset branching**. The deployment shape matches how data teams
+actually live: **your data stays in your bucket** (S3/GCS — or local disk while
+trying it out), and compute is a single fast node — your laptop for development,
+a CI runner for checks. No cluster, no migration.
 
 A branch scopes to the tables you're changing. Those get zero-copy, copy-on-write
 Iceberg refs — writable, invisible to prod. Every *other* table is read from prod,
@@ -107,8 +110,9 @@ neither Slim CI nor manual clone discipline gives you structurally.
 
 - **Not a query engine, storage engine, or table format.** We compose DuckDB,
   Iceberg, and SQLGlot, and add the branch layer and glue.
-- **Not a Snowflake competitor.** The target is small teams and the local/CI loop —
-  correct and pleasant at tens of gigabytes on a laptop, not petabytes on a cluster.
+- **Not a Snowflake competitor.** The target is small teams — one fast node over
+  data in your bucket, correct and pleasant at tens of gigabytes, not petabytes on
+  a cluster.
 - **Not a data merge tool.** Promote or discard. Never merge.
 - **Not a migration.** Subset branches work over standard Iceberg catalogs — the
   long-term goal is branching *your existing* lakehouse, not moving it.

@@ -65,7 +65,8 @@ on close.
 
 ## Team mode
 
-Point the same project at shared infrastructure — no tool changes:
+This is the production posture — **your bucket is the warehouse, your laptop is the
+engine**. Point the same project at shared infrastructure; no tool changes:
 
 ```yaml
 # reble.yml

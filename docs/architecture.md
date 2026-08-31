@@ -36,9 +36,16 @@ And in CI (the flagship workflow):
                                   # on close: delete branch
 ```
 
-Everything runs on a laptop with **zero services**: DuckDB embedded, Iceberg tables on
-local filesystem, SQLite-backed catalog, transforms in-process. The same project scales to
-team mode (S3 + Postgres/REST catalog + CI runners) by changing config, not tools.
+Two modes, one tool. The **on-ramp** runs entirely on a laptop with zero services:
+DuckDB embedded, Iceberg on local filesystem, SQLite-backed catalog, transforms
+in-process. **Production is team mode** — the same project pointed at S3/GCS plus a
+shared Postgres/REST catalog, because that's where real warehouses live; the laptop
+(or CI runner) remains the query engine. Nothing in the branch model depends on
+local storage: branches and pins are catalog metadata, so zero-copy creation and
+epoch semantics hold identically over object storage — the only delta is scan
+latency, mitigated by lineage-driven projection pushdown. Team-mode latency will be
+measured (spike 6: MinIO for correctness, real S3 for numbers) before any
+performance claim is made for it; the published benchmarks are local-NVMe.
 
 ---
 
