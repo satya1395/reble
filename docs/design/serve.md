@@ -1,7 +1,10 @@
 # Design: `reble serve` — your branch in your own tools
 
-**Status: design on a feature branch. Not shipped. Target: first post-launch
-release.**
+**Status: M1 (spike 08) and M2 (the `reble serve` command) are BUILT on this
+branch, with 7 tests. Spike 08 PASSED: stock pyiceberg and stock DuckDB 1.5.5
+both read a branch's world through the proxy — see
+[spikes/08-serve/RESULTS.md](../../spikes/08-serve/RESULTS.md), including the
+snapshot-log lesson. Merge target: first post-launch release.**
 
 ## Goal
 

@@ -32,3 +32,4 @@ spikes/**/.cache/
 # Logs
 *.log
 spikes/07-local-overlay/work/
+spikes/08-serve/work/

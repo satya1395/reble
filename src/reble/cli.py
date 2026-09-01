@@ -397,6 +397,47 @@ def query_cmd(sql: str):
 
 
 @cli.command()
+@click.option("--port", default=8181, show_default=True)
+@click.option("--host", default="127.0.0.1", show_default=True,
+              help="Loopback only — do not expose this without a tunnel")
+@click.option("--verbose", is_flag=True, help="Log each catalog request")
+def serve(port: int, host: str, verbose: bool):
+    """Serve this branch's view as a read-only Iceberg REST catalog.
+
+    Any Iceberg-speaking tool (DuckDB, DBeaver via DuckDB, Spark, Trino,
+    pyiceberg) connects to the endpoint and sees the warehouse exactly as
+    the current branch sees it. Metadata only — clients read Parquet
+    directly from the warehouse. Writes are refused; `reble run` is the
+    only write path.
+    """
+    from reble.config import load_config
+    from reble.serve import make_server
+    try:
+        cfg = load_config()
+        srv = make_server(cfg, host, port, verbose=verbose)
+    except OSError as e:
+        _fail(RebleError(f"cannot bind {host}:{port} — {e}"))
+    except RebleError as e:
+        _fail(e)
+    branch = srv.engine.state.current_branch()
+    _ctx(branch)
+    _ok(f"serving this branch's view at {_tb(f'http://{host}:{port}')}")
+    click.echo("  " + _dim("connect any Iceberg REST client · read-only · "
+                           "Ctrl-C to stop"))
+    click.echo("  " + _dim(f"duckdb: ATTACH 'warehouse' AS wh (TYPE iceberg, "
+                           f"ENDPOINT 'http://{host}:{port}', "
+                           f"AUTHORIZATION_TYPE 'none');"))
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        srv.server_close()
+    click.echo()
+    _ok(f"stopped · was serving {_br(branch)}")
+
+
+@cli.command()
 @click.option("--json", "as_json", is_flag=True, help="Machine-readable output")
 def diff(as_json: bool):
     """Show what the current branch changes, per scoped table."""
