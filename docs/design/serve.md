@@ -141,36 +141,15 @@ that speaks Iceberg REST (Trino, Spark) configured with
 Spike 08 must validate the exact ATTACH incantation and minimum driver
 versions before this guide ships.
 
-## M3.5 — a basic local UI (PlanetScale-shaped, single-user)
+## No UI in OSS (decided 2026-09-01)
 
-`reble serve` already runs an HTTP server; the UI is one more route.
-
-- **`/ui`** serves a single static HTML file embedded in the package —
-  vanilla JS, no build step, no CDN (works offline), palette identical to
-  `docs/assets/cli-design.html` (#15181e ground, cyan branch, dim gutters,
-  +green/−red/~yellow).
-- **`/api/*` = the `--json` outputs re-exposed**: `/api/status`,
-  `/api/branches`, `/api/diff`, and `POST /api/query` (row-capped, runs
-  through the same resolver as everything else). The CLI's JSON work *is*
-  the UI's backend; nothing is computed twice.
-- **Panels (v1, read-only):**
-  - branch header: ⎇ name, git provenance line, TTL countdown
-  - status card: edited-not-run, pin drift, last run
-  - branch list with ● current
-  - **diff view — the money shot**: per-table cards with colored row
-    counts, the PlanetScale deploy-request feel for data
-  - query console: textarea → results table (LIMIT enforced)
-- **Deliberately absent in v1: action buttons.** No promote/delete from
-  the browser — the UI shows the command instead. Keeps the read-only
-  posture of serve, and mutation stays where the guards and confirmations
-  live. Actions can come later behind explicit opt-in.
-
-**Boundary note (revises the licensing doc's shorthand):** "web UI" was
-listed wholesale on the SaaS side. Applying the capability-vs-service test
-properly: a *single-user, single-machine, read-only* UI is a capability →
-OSS. The SaaS surface is the *collaboration* dashboard: multi-user review,
-comments/approvals, RBAC/SSO, audit, org lineage, hosted branch endpoints.
-This local UI is the seed of that dashboard, not a substitute for it.
+There is deliberately **no web UI in the open-source product** — a common
+and honest open-core line (the CLI is complete without one). The OSS visual
+surface is *your own tools through serve*: DBeaver, DataGrip, notebooks, BI
+readers. The only reble UI that will ever exist is the hosted dashboard on
+the SaaS side (collaboration, review, RBAC, audit, hosted branch
+endpoints) — see the internal plan. This also keeps `serve` small: one
+protocol, no static assets, no frontend toolchain in the repo.
 
 ## Non-goals
 
