@@ -308,6 +308,16 @@ Shipped in v0.1.0: **reble follows git** — implicit data branches on `reble ru
 git provenance in `reble status`, `--json` on every read command. Next, in rough
 order (opinions welcome in Discussions):
 
+- **`reble serve` — your branch in your own tools** — a local Iceberg REST
+  catalog proxy that answers with branch-resolved snapshots, so DBeaver,
+  DataGrip, DuckDB, Spark, or a notebook connect to localhost and see the
+  warehouse exactly as your branch sees it. Read-only, no plugin required.
+- **Agent-native operation** — the branching machinery is designed to disappear
+  under the hood: an MCP server exposing run/diff/status/promote as structured
+  tools, so an AI agent can take "exclude cancelled orders from revenue and show
+  me the impact," edit the model, get a zero-copy sandbox branch automatically,
+  and hand back the row-level diff — with prod physically out of reach. The
+  `--json` output on every read command is the substrate for this.
 - **`reble branch refresh`** — re-pin a long-lived branch's inputs to now and
   rerun, so a two-week-old branch can catch up to today's data before promote.
 - **Team mode: local branches, remote main** — developers get read-only bucket
