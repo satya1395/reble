@@ -80,6 +80,28 @@ read-only by design — external writes would bypass the branch guard.
   resolver already answers "local catalog or remote pinned?" per table; the
   proxy inherits that for free. This is why serve waits for nothing.
 
+## Why not a DuckDB extension?
+
+Asked during design (2026-09-01), answered here for posterity:
+
+1. **One resolver, or two.** The resolver (scope/pins/epoch, branch state)
+   is Python on pyiceberg. A C++ extension means a second implementation of
+   the most subtle semantics, kept in lockstep forever. The proxy reuses the
+   one resolver verbatim — the point of the two-skins architecture.
+2. **Reach.** An extension serves DuckDB; the proxy serves every engine,
+   because the Iceberg REST catalog protocol is effectively the plugin API
+   the whole industry already speaks — DuckDB's own iceberg extension
+   attaches to it.
+3. **Maintenance.** DuckDB's C++ API churns per release; the REST spec is
+   stable and versioned.
+4. **SaaS continuity.** The proxy is the same code path as the future
+   hosted resolver. An extension can't be hosted.
+
+The embedded experience already exists as `reble query` (same process, no
+HTTP). Possible M4, demand-driven: a thin sugar extension giving stock
+DuckDB `ATTACH 'reble:…'` that talks to the local resolver — a wrapper,
+never a second resolver.
+
 ## Milestones
 
 - **M1 — spike 08 (`spikes/08-serve/`):** hand-rolled server, `config` +
