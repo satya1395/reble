@@ -37,11 +37,12 @@ embedded in the CLI, so your laptop and your CI runners *are* the compute — fo
 exactly as long as a run takes, and never a second of billing after.
 
 > ⚠️ **Status: pre-alpha, but real.** The full loop works today — `init → run →
-> branch → run → diff → promote`, both git orders, with 53 passing tests —
+> branch → run → diff → promote`, both git orders, with 54 passing tests —
 > `pip install reble` and go. The engine is the
 > [spike-validated](spikes/04-sqlglot-direct/RESULTS.md) SQLGlot-direct core:
-> models are plain SQL files, exactly as described below. Feedback is the most
-> valuable contribution — open a Discussion.
+> models are plain SQL files, exactly as described below. Developed and
+> CI-tested on macOS and Linux; Windows is untested (reports welcome).
+> Feedback is the most valuable contribution — open a Discussion.
 
 **→ [Why Reble exists](docs/why.md)** — the full story: the four gaps in data
 engineering workflows, why existing tools don't close them, and why now.
@@ -320,6 +321,9 @@ order (opinions welcome in Discussions):
   `--json` output on every read command is the substrate for this.
 - **`reble branch refresh`** — re-pin a long-lived branch's inputs to now and
   rerun, so a two-week-old branch can catch up to today's data before promote.
+- **SQL-defined data tests** — `unique`, `not_null`, accepted-values as plain
+  SQL assertions that run with the models and gate promote; the diff answers
+  "what changed", tests should answer "is it still correct".
 - **Team mode: local branches, remote main** — developers get read-only bucket
   credentials and branch locally as zero-copy overlays of pinned prod snapshots
   ([spike-validated](spikes/07-local-overlay/RESULTS.md): 6ms, nothing copied,

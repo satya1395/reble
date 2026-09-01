@@ -197,8 +197,9 @@ class BranchEngine:
         if dirty:
             raise BranchError(
                 f"cannot fast-forward: main advanced since branching for {dirty}. "
-                "Switch to main and rerun the models there (reble branch rebase "
-                "is coming); no data merge will ever happen."
+                "The remedy is a rebuild on current main: `reble branch switch "
+                "main && reble run` recomputes your changed models against "
+                "today's inputs. No data merge will ever happen."
             )
 
         stale_pins = [
