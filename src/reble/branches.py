@@ -118,9 +118,12 @@ class BranchEngine:
                 # empty table (no snapshot yet): ref is created on first write
             # not in catalog yet: new-model workflow, created on first write
 
-        if open_scope:
+        if open_scope and pin_tables is None:
             pins = {}   # epoch resolution covers every unscoped read lazily
         else:
+            # open_scope + pin_tables: a git-followed branch — initial scope
+            # inferred now, scope stays open for later edits, known upstream
+            # inputs precomputed (equivalent to epoch resolution, nicer status)
             pinnable = (existing & set(pin_tables)) if pin_tables is not None \
                 else existing - set(scope)
             pins = {

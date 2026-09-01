@@ -132,7 +132,7 @@ $ vim models/core/stg_orders.sql   # ... WHERE status != 'cancelled'
 $ git switch -c fix-cancelled-revenue
 $ reble run
 ⎇ main → fix-cancelled-revenue · data branch created from your git branch
-  scope  core.fct_revenue_daily, core.mart_exec_dashboard, core.stg_orders  inferred from your changes
+  scope  core.fct_revenue_daily, core.mart_exec_dashboard, core.stg_orders  inferred from your edits · grows as you work
   pins   raw.orders  upstream inputs, frozen now
 ⎇ fix-cancelled-revenue
   changed    core.stg_orders, core.fct_revenue_daily, core.mart_exec_dashboard
@@ -176,119 +176,18 @@ $ reble promote
 under you with every hourly ingest), eyeballed two spreadsheet exports, and pushed to
 prod hoping.
 
-### 2. Building a brand-new mart (greenfield, branch-first)
+### Three more, told in full in [docs/scenarios.md](docs/scenarios.md)
 
-You're starting `mart_weekly_retention`. Nothing downstream exists yet, so there's
-nothing to diff against — the risks are different: your inputs drifting while you
-iterate, and a half-finished table leaking into prod where the BI tool will find it.
-
-Branch first, git-style, *before* writing any SQL:
-
-```console
-$ reble branch create weekly-retention
-⎇ main → weekly-retention
-  scope  open — grows when you edit models and run
-  reads  every table frozen as of now (the branch epoch)
-✓ switched to weekly-retention
-```
-
-Now iterate. Twenty runs over three days while prod ingests hourly — every run
-computes against the same Tuesday-9am inputs, so when the retention curve changes,
-it's because *your SQL* changed:
-
-```console
-$ vim models/core/mart_weekly_retention.sql
-$ reble run
-⎇ weekly-retention
-  changed    core.mart_weekly_retention
-  published  core.mart_weekly_retention → branch ref
-✓ 1 model in 0.3s
-
-$ reble diff
-⎇ weekly-retention vs base
-
-  core.mart_weekly_retention  new table — profile
-    rows 53   cols cohort_week timestamp · customers int64 · retained_w1 double · retained_w4 double 5 nulls
-```
-
-A profile, not a diff — there's no "before" for a new table. Those 5 nulls in
-`retained_w4`? Caught here, not in the exec's dashboard. When it's right, `reble
-promote` — and the moment it lands, the new mart is registered in the lineage graph,
-so the *next* person who touches `stg_customers` gets warned that your mart reads it.
-
-### 3. Two engineers, two branches, zero coordination
-
-Priya is fixing order dedup in `stg_orders`. Marco is building `mart_customer_ltv`.
-Neither knows what the other is doing. Neither needs to.
-
-```mermaid
-gitGraph
-    commit id: "prod"
-    branch priya/fix-dedup
-    commit id: "dedup fix + diff"
-    checkout main
-    branch marco/customer-ltv
-    commit id: "new LTV mart"
-    checkout main
-    merge priya/fix-dedup id: "promote #1"
-    merge marco/customer-ltv id: "promote #2 (rebase check passes)"
-```
-
-Their scopes are disjoint — Priya's refs on `stg_orders`+downstream, Marco's on his
-new mart — so they work in parallel all week. Promotes go one at a time. Priya
-promotes first. When Marco promotes, Reble checks: *do any of Marco's models read the
-tables Priya changed?*
-
-- **No** → Marco's promote fast-forwards, done.
-- **Yes** (his LTV mart reads `stg_orders`) → promote refuses with instructions:
-  rerun against the new main, re-validate, then promote. Never a silent data merge.
-
-The overlap case is caught even earlier — at *creation*:
-
-```console
-$ reble branch create also-touching-orders
-⎇ main → also-touching-orders
-  scope  core.stg_orders, core.fct_revenue_daily  inferred from your changes
-  pins   raw.orders  upstream inputs, frozen now
-⚠ core.stg_orders is also scoped by branch priya/fix-dedup — second promote will require a rebase
-✓ switched to also-touching-orders
-```
-
-**Without branches:** Priya and Marco share a dev schema, clobber each other's
-tables, and coordinate via Slack messages that start with "hey, are you using...".
-
-### 4. The save — a bad change that never reached prod
-
-You "simplify" a join in `stg_orders`. The SQL looks obviously correct. A reviewer
-would have approved it.
-
-```console
-$ reble branch create simplify-join
-$ reble run
-$ reble diff
-⎇ simplify-join vs base
-
-  core.stg_orders  1,168,210 → 1,919,630 rows
-    +751,420 added   no unique key: changes count as +/− pairs
-
-  core.fct_revenue_daily  730 → 730 rows · key date_id
-    ~730 changed
-```
-
-**A 64% row explosion — and revenue restated on all 730 days.** The "simplified"
-join fans out on duplicate customer keys. Caught on a laptop, on frozen inputs, in
-a branch nobody else can see:
-
-```console
-$ reble branch delete simplify-join
-✓ deleted branch simplify-join
-```
-
-Nothing to roll back, nothing to explain in the incident channel, no backfill. The
-branch cost ~0 bytes to create and one command to destroy.
-
-**Without branches:** this ships Friday, the weekend batch triples revenue, and
-Monday starts with an incident review.
+- **[Building a brand-new mart](docs/scenarios.md#2-building-a-brand-new-mart-greenfield-branch-first)** —
+  branch-first on a clean tree: frozen inputs while you iterate for days, and a
+  *profile* instead of a diff (those 5 nulls get caught here, not in the exec's
+  dashboard).
+- **[Two engineers, two branches, zero coordination](docs/scenarios.md#3-two-engineers-two-branches-zero-coordination)** —
+  disjoint scopes work in parallel; overlap is warned at *creation*, and promote
+  refuses to silently merge data.
+- **[The save](docs/scenarios.md#4-the-save--a-bad-change-that-never-reached-prod)** —
+  a "simplified" join fans out into a 64% row explosion, caught on a laptop on
+  frozen inputs, deleted for free.
 
 ### The pattern
 
@@ -356,45 +255,30 @@ Postgres or REST catalog** — because that's where real warehouses live. Your l
 > ⚠️ **Team mode status — be clear-eyed here.** What's validated today is the
 > *single-writer* shape: one person (or one CI job) running the loop over
 > S3 ([spike 06](spikes/06-s3-team-mode/RESULTS.md)). **Multiple people writing
-> through a shared catalog at once is not supported yet** — branch state is
-> per-checkout, there's no promote lock, and concurrent-writer behavior is
-> untested. The multi-user design below (local branches, remote main) is
-> spike-validated but not wired. If you're a team today: give exactly one
-> identity write access and treat everyone else as readers.
+> through a shared catalog at once is not supported yet.** The multi-user design
+> (local branches, remote main — [spike 07](spikes/07-local-overlay/RESULTS.md))
+> is validated but not wired. If you're a team today: give exactly one identity
+> write access and treat everyone else as readers.
 
 **The team flow is the dbt flow.** Edit SQL on a git branch, `reble run` locally
 (the data branch appears, inputs frozen), open a PR (the bot posts the row-level
 diff), merge — and a prod job runs `reble run` on main, rebuilding exactly the
-changed models against current inputs. Nobody types `promote` on a team:
-promote is the solo shortcut for publishing an already-computed branch when you
-*are* your own prod job.
-
-Where this is headed (design settled, [spike-validated](spikes/07-local-overlay/RESULTS.md),
-wiring on the roadmap): **branches are local, main is remote — exactly like git.**
-Developers hold read-only credentials to the shared bucket; their data branches
-live on their own machines as zero-copy overlays of pinned prod snapshots
-(measured: branching a remote 1M-row table locally takes 6ms and copies
-nothing, and local writes leave the shared warehouse bit-identical). The only
-identity that can write shared main is the merge gate. "Individuals can't touch
-prod" becomes an IAM property, not a convention.
+changed models against current inputs. Nobody types `promote` on a team; it's the
+solo shortcut for when you *are* your own prod job. Where this is headed:
+**branches local, main remote, exactly like git** — developers hold read-only
+bucket credentials, branch as zero-copy overlays of pinned prod snapshots
+(measured: 6ms, nothing copied), and only the merge gate writes main.
 
 ![Query flow: the reble CLI on your laptop or a CI runner runs SQLGlot, pyiceberg and embedded DuckDB; it GETs Iceberg metadata and only the needed column chunks from your S3 bucket, computes locally in RAM, and PUTs results back as a branch-ref commit. No database server anywhere.](docs/assets/query-flow.png)
 
-*"Local compute" does not mean copying the warehouse.* There is no database
-server anywhere: the warehouse is Parquet files in Iceberg layout, and the
-query engine (DuckDB) lives inside the CLI. Each `reble run` reads **just what
-that run needs** — only the tables your changed models touch, only the columns
-their SQL references, at the pinned snapshots — streams it through memory, and
-writes results back to the bucket. Nothing is replicated, synced, or stored
-locally. It's the same I/O a remote warehouse does internally; the only things
-that moved are where the CPU sits, and who bills you for it. The branch machinery doesn't change:
-branches and pins are *catalog metadata*, so branching a 500GB table in S3 is the
-same instant, zero-copy operation as locally — only scan latency differs, and
-lineage-driven column pruning is the mitigation. (Honest status: the full loop is
-[validated over MinIO and real AWS S3](spikes/06-s3-team-mode/RESULTS.md) —
-per-op latency lands in the hundreds-of-ms band on real S3, fine for
-interactive use. Still open: shared-catalog concurrency and large-scan S3
-throughput — unmeasured means unclaimed.)
+*"Local compute" does not mean copying the warehouse.* Each `reble run` streams
+**just what that run needs** — the tables its changed models touch, the columns
+their SQL references, at the pinned snapshots — through memory and writes results
+back to the bucket. Nothing is replicated or stored locally; it's the same I/O a
+remote warehouse does internally, with the CPU (and the bill) relocated. Branches
+and pins are catalog metadata, so branching a 500GB table in S3 is the same
+instant, zero-copy operation as locally. The full mechanics, measured S3 numbers,
+and what's still unmeasured: [architecture.md](docs/architecture.md).
 
 ```yaml
 # reble.yml — the entire difference between modes

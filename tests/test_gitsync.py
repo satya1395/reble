@@ -7,7 +7,7 @@ import subprocess
 import pytest
 from click.testing import CliRunner
 
-from reble.cli import cli
+from reble.cli import WARN, cli
 from reble.gitinfo import branchable_name, git_info
 
 
@@ -67,6 +67,30 @@ def test_run_follows_git_feature_branch(project):
     out2 = runner.invoke(cli, ["run"])
     assert out2.exit_code == 0
     assert "created from your git branch" not in out2.output
+
+
+def test_follow_branch_grows_with_later_edits(project):
+    """Case 3 from the design discussion: a git-followed branch created
+    edit-first must keep accepting NEW models edited later — git never
+    refuses an edit, so neither does the followed data branch."""
+    proj, runner = project
+    _repo(proj)
+    assert runner.invoke(cli, ["run"]).exit_code == 0
+    _git(proj, "switch", "-qc", "fix-grow")
+    (proj / "models/demo/example.sql").write_text(
+        "SELECT 9 AS id, 'grown' AS message")
+    assert runner.invoke(cli, ["run"]).exit_code == 0   # branch created
+    # two weeks later: a brand-new model, outside the original scope
+    (proj / "models/demo/extra.sql").write_text(
+        "SELECT COUNT(*) AS n FROM demo.example")
+    out = runner.invoke(cli, ["run"])
+    assert out.exit_code == 0, out.output
+    assert "demo.extra" in out.output
+    assert WARN not in out.output                       # no guard refusal
+    st = json.loads(runner.invoke(cli, ["status", "--json"]).output)
+    assert st["open_scope"] is True
+    assert "demo.extra" in st["scope"]
+    assert "demo.example" in st["scope"]                # initial scope kept
 
 
 def test_run_on_git_main_stays_on_main(project):

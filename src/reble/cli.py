@@ -224,6 +224,11 @@ def status(as_json: bool):
         click.echo(_gut("scope") + _dim("open — grows when you edit models and run"))
         if m.scope:
             click.echo(_gut("writable") + ", ".join(_tb(t) for t in m.scope))
+        if m.pins:
+            pins = sorted(m.pins)
+            shown = ", ".join(pins[:2])
+            more = f" {_dim(f'+{len(pins) - 2} more,')}" if len(pins) > 2 else ""
+            click.echo(_gut("pinned") + f"{shown}{more} {_dim('frozen at epoch')}")
         click.echo(_gut("reads") + _dim("every table frozen as of the branch epoch"))
     else:
         click.echo(_gut("writable") + ", ".join(_tb(t) for t in m.scope))
@@ -286,12 +291,15 @@ def _follow_git(cfg, eng, gi, quiet: bool = False) -> None:
     if not quiet:
         _ctx(MAIN, to=follow, suffix="· data branch created from your git branch")
     if scope:
-        m = eng.create(follow, scope,
+        # open_scope with an inferred initial scope: a followed branch keeps
+        # growing — models edited later join at their next run, like git never
+        # refusing an edit. The strict guard remains for explicit --tables.
+        m = eng.create(follow, scope, open_scope=True,
                        pin_tables=upstream_closure(scope, models), **git_kw)
         if not quiet:
             click.echo(f"  {_dim('scope')}  "
                        + ", ".join(_tb(t) for t in m.scope)
-                       + f"  {_dim('inferred from your changes')}")
+                       + f"  {_dim('inferred from your edits · grows as you work')}")
             pins = sorted(m.pins)
             if pins:
                 shown = ", ".join(pins[:3]) \
