@@ -26,18 +26,24 @@
   .num { color:#d6dae2; }
 </style></head><body>
 <h1>reble CLI output design</h1>
-<div class="legend">Every command opens with a <b>⎇ branch context line</b> · cyan = branch · bold = table · <span style="color:#3f9d54">+added</span> <span style="color:#c0392b">−removed</span> <span style="color:#b8860b">~changed</span> · dim = secondary · aligned gutters</div>
+<div class="legend">Every command opens with a <b>⎇ branch context line</b> · cyan = branch · bold = table · <span style="color:#3f9d54">+added</span> <span style="color:#c0392b">−removed</span> <span style="color:#b8860b">~changed</span> · dim = secondary · aligned gutters · v0.1: <b>reble follows git</b> — run creates the data branch</div>
 <div class="grid">
 
 <div class="card"><div class="bar">$ reble status</div><pre><span class="gl">⎇</span> <span class="br">fix-clv-returns</span>
-  <span class="dim">created</span>   2026-09-01 09:14 <span class="dim">· ttl 14d</span>
+  <span class="dim">git       fix-clv-returns · data reflects ab48c1b + uncommitted edits</span>
+  <span class="dim">created</span>   2026-09-01 09:14 <span class="dim">· 2h ago · expires in 13d</span>
+  <span class="dim">last run</span>  2h ago
+  <span class="dim">edited</span>    <span class="tb">jaffle.customers</span>  <span class="dim">not yet run</span>
   <span class="dim">writable</span>  <span class="tb">jaffle.customers</span>
-  <span class="dim">pinned</span>    jaffle.stg_customers, jaffle.stg_orders <span class="dim">+4 more, frozen at epoch</span></pre></div>
+  <span class="dim">pinned</span>    jaffle.stg_customers, jaffle.stg_orders <span class="dim">+4 more, frozen at epoch</span>
+  <span class="dim">behind</span>    <span class="tb">raw.orders</span>  <span class="dim">moved on main since your epoch</span></pre></div>
 
-<div class="card"><div class="bar">$ reble branch create fix-clv-returns</div><pre><span class="gl">⎇</span> <span class="br">main</span> <span class="dim">→</span> <span class="br">fix-clv-returns</span>
+<div class="card"><div class="bar">$ git switch -c fix-clv-returns && reble run   <span style="color:#6b7383">(v0.1: the branch step is gone)</span></div><pre><span class="gl">⎇</span> <span class="br">main</span> <span class="dim">→</span> <span class="br">fix-clv-returns</span> <span class="dim">· data branch created from your git branch</span>
   <span class="dim">scope</span>  <span class="tb">jaffle.customers</span>                    <span class="dim">inferred from your changes</span>
   <span class="dim">pins</span>   raw.orders, jaffle.stg_orders <span class="dim">+4     upstream inputs, frozen now</span>
-<span class="ok">✓</span> switched to <span class="br">fix-clv-returns</span></pre></div>
+<span class="gl">⎇</span> <span class="br">fix-clv-returns</span>
+  <span class="dim">published</span>  <span class="tb">jaffle.customers</span> <span class="dim">→ branch ref</span>
+<span class="ok">✓</span> 1 model in 0.4s</pre></div>
 
 <div class="card"><div class="bar">$ reble branch create explore   <span style="color:#6b7383">(branch-first, clean tree)</span></div><pre><span class="gl">⎇</span> <span class="br">main</span> <span class="dim">→</span> <span class="br">explore</span>
   <span class="dim">scope</span>  <span class="dim">open — grows when you edit models and run</span>
@@ -72,8 +78,10 @@
 
 <div class="card"><div class="bar">$ reble promote</div><pre><span class="gl">⎇</span> <span class="br">fix-clv-returns</span> <span class="dim">→</span> <span class="br">main</span>
   <span class="ok">✓</span> <span class="tb">jaffle.customers</span>
-<span class="wr">⚠</span> pinned input raw.orders advanced on main while you worked <span class="dim">— results used the older snapshot</span>
-<span class="ok">✓</span> promoted <span class="dim">· branch deleted ·</span> on <span class="br">main</span></pre></div>
+<span class="wr">⚠</span> pinned input raw.orders advanced on main while you worked
+  <span class="dim">— your results used the older, pinned snapshot</span>
+<span class="ok">✓</span> promoted <span class="dim">· branch deleted ·</span> on <span class="br">main</span>
+  <span class="dim">your data is on main; git is still on fix-clv-returns — merge or switch when ready</span></pre></div>
 
 <div class="card"><div class="bar">$ reble load raw.orders seeds/orders.csv</div><pre><span class="gl">⎇</span> <span class="br">main</span>
 <span class="ok">✓</span> 300 rows <span class="dim">→</span> <span class="tb">raw.orders</span> <span class="dim">(append)</span></pre></div>

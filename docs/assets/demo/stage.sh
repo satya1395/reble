@@ -84,7 +84,13 @@ reble load raw.orders seeds/orders.csv
 reble load raw.customers seeds/customers.csv
 reble run
 
-# the one-line fix (edit-first: branch create will infer the cascade)
+# a git repo, so the tape can show v0.1.0's git-follow (run creates the branch)
+git init -qb main
+git add -A
+git -c user.email=demo@reble -c user.name=demo commit -qm "baseline models"
+
+# the one-line fix (edit-first: the tape's `git switch -c` + `reble run` will
+# infer the cascade and create the data branch)
 cat > models/core/stg_orders.sql <<'SQL'
 SELECT order_id, customer_id, date_id, status, amount
 FROM raw.orders

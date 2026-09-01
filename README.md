@@ -16,7 +16,7 @@ scale, or pay for.
 SELECT id, amount FROM raw.orders WHERE amount > 0
 ```
 
-![The reble loop in 30 seconds: a one-line metric fix on a 1.2M-row warehouse — branch create with inferred scope, run, row-level diff, query on the branch, promote](docs/assets/demo.gif)
+![The reble loop in 40 seconds: a one-line metric fix on a 1.2M-row warehouse — git switch -c, then reble run creates the data branch with inferred scope, status shows git provenance, row-level diff, query on the branch, promote](docs/assets/demo.gif)
 
 <sub>Prefer stills? The full [CLI output design](docs/assets/cli-design.png) shows every command's output on one page ([HTML source](docs/assets/cli-design.html)).</sub>
 
@@ -129,24 +129,25 @@ gitGraph
 ```console
 $ vim models/core/stg_orders.sql   # ... WHERE status != 'cancelled'
 
-$ reble branch create fix-cancelled-revenue
-⎇ main → fix-cancelled-revenue
-  scope  core.stg_orders, core.fct_revenue_daily, core.mart_exec_dashboard  inferred from your changes
-  pins   raw.orders  upstream inputs, frozen now
-✓ switched to fix-cancelled-revenue
-```
-
-Notice what you didn't do: enumerate the downstream cascade. Reble read it off the
-model graph — your one-line edit touches three tables, and the raw input feeding
-them is pinned so hourly ingestion can't shift your numbers mid-analysis.
-
-```console
+$ git switch -c fix-cancelled-revenue
 $ reble run
+⎇ main → fix-cancelled-revenue · data branch created from your git branch
+  scope  core.fct_revenue_daily, core.mart_exec_dashboard, core.stg_orders  inferred from your changes
+  pins   raw.orders  upstream inputs, frozen now
 ⎇ fix-cancelled-revenue
   changed    core.stg_orders, core.fct_revenue_daily, core.mart_exec_dashboard
   published  core.stg_orders, core.fct_revenue_daily, core.mart_exec_dashboard → branch ref
-✓ 3 models in 0.4s
+✓ 3 models in 0.2s
+```
 
+Notice what you didn't do: create a branch in reble, or enumerate the downstream
+cascade. The data branch followed your git branch, and the scope came off the
+model graph — your one-line edit touches three tables, and the raw input feeding
+them is pinned so hourly ingestion can't shift your numbers mid-analysis.
+(Prefer it explicit? `reble branch create` still works, and it's the flow for
+projects without a git repo.)
+
+```console
 $ reble diff
 ⎇ fix-cancelled-revenue vs base
 
@@ -164,10 +165,11 @@ sign-off, then:
 ```console
 $ reble promote
 ⎇ fix-cancelled-revenue → main
-  ✓ core.stg_orders
   ✓ core.fct_revenue_daily
   ✓ core.mart_exec_dashboard
+  ✓ core.stg_orders
 ✓ promoted · branch deleted · on main
+  your data is on main; git is still on fix-cancelled-revenue — merge or switch when ready
 ```
 
 **Without branches:** you'd have run this in a shared dev schema (numbers drifting
