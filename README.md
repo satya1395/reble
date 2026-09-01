@@ -351,6 +351,15 @@ you try Reble in about ten minutes, run its test suite, or run a solo project.
 Postgres or REST catalog** — because that's where real warehouses live. Your laptop
 (or a CI runner) stays the query engine.
 
+> ⚠️ **Team mode status — be clear-eyed here.** What's validated today is the
+> *single-writer* shape: one person (or one CI job) running the loop over
+> S3 ([spike 06](spikes/06-s3-team-mode/RESULTS.md)). **Multiple people writing
+> through a shared catalog at once is not supported yet** — branch state is
+> per-checkout, there's no promote lock, and concurrent-writer behavior is
+> untested. The multi-user design below (local branches, remote main) is
+> spike-validated but not wired. If you're a team today: give exactly one
+> identity write access and treat everyone else as readers.
+
 **The team flow is the dbt flow.** Edit SQL on a git branch, `reble run` locally
 (the data branch appears, inputs frozen), open a PR (the bot posts the row-level
 diff), merge — and a prod job runs `reble run` on main, rebuilding exactly the

@@ -144,9 +144,14 @@ header in disguise.
 There is deliberately no second environment system: Iceberg branch refs are the one
 and only isolation layer, for model outputs and raw tables alike.
 
-**Concurrency & team workflow.** Multiple engineers work on branches simultaneously
-(independent refs; requires the shared team-mode catalog — local SQLite is
-single-user) and promote sequentially:
+**Concurrency & team workflow.** ⚠️ *Design, not shipped: multi-writer team mode
+needs work.* Today only the single-writer shape is validated (one person or one
+CI job over S3); branch state is per-checkout, there is no promote lock, and
+concurrent writers through a shared catalog are untested. The settled direction
+(spike 07: local branches over a read-only remote main) removes most of the
+problem — individuals never write the shared catalog at all, and the merge gate
+is the single writer. Until that's wired, the design intent below describes how
+multiple engineers *will* work simultaneously:
 
 1. **Promotes are serialized** (promote lock / merge-queue semantics; maps 1:1 onto
    PRs merging one at a time in CI).
