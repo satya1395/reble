@@ -116,6 +116,62 @@ never a second resolver.
 - **M3 — docs + demo:** README roadmap item flips to shipped; GIF snippet
   of DBeaver showing branch rows; architecture.md adapter section updated.
 
+## Using it from DBeaver / DataGrip (the M2 user guide, drafted now)
+
+Both tools speak to serve through their existing DuckDB driver — no plugin:
+
+**DBeaver**
+1. New connection → **DuckDB** → in-memory (`:memory:`).
+2. Connection settings → *Initialization* → bootstrap SQL:
+   ```sql
+   INSTALL iceberg; LOAD iceberg;
+   ATTACH 'warehouse' AS wh (TYPE iceberg, ENDPOINT 'http://127.0.0.1:8181');
+   ```
+3. Connect. The `wh` database in the tree *is your branch's warehouse* —
+   browse schemas, run SQL, export results. Switch reble branches in the
+   terminal; reconnect (or re-run ATTACH) to see the other branch.
+
+**DataGrip**: same shape — DuckDB data source, the ATTACH block as a
+startup script.
+
+**Anything that can't run DuckDB** (some BI tools): point it at any engine
+that speaks Iceberg REST (Trino, Spark) configured with
+`http://127.0.0.1:8181` as its catalog. Same proxy, same branch view.
+
+Spike 08 must validate the exact ATTACH incantation and minimum driver
+versions before this guide ships.
+
+## M3.5 — a basic local UI (PlanetScale-shaped, single-user)
+
+`reble serve` already runs an HTTP server; the UI is one more route.
+
+- **`/ui`** serves a single static HTML file embedded in the package —
+  vanilla JS, no build step, no CDN (works offline), palette identical to
+  `docs/assets/cli-design.html` (#15181e ground, cyan branch, dim gutters,
+  +green/−red/~yellow).
+- **`/api/*` = the `--json` outputs re-exposed**: `/api/status`,
+  `/api/branches`, `/api/diff`, and `POST /api/query` (row-capped, runs
+  through the same resolver as everything else). The CLI's JSON work *is*
+  the UI's backend; nothing is computed twice.
+- **Panels (v1, read-only):**
+  - branch header: ⎇ name, git provenance line, TTL countdown
+  - status card: edited-not-run, pin drift, last run
+  - branch list with ● current
+  - **diff view — the money shot**: per-table cards with colored row
+    counts, the PlanetScale deploy-request feel for data
+  - query console: textarea → results table (LIMIT enforced)
+- **Deliberately absent in v1: action buttons.** No promote/delete from
+  the browser — the UI shows the command instead. Keeps the read-only
+  posture of serve, and mutation stays where the guards and confirmations
+  live. Actions can come later behind explicit opt-in.
+
+**Boundary note (revises the licensing doc's shorthand):** "web UI" was
+listed wholesale on the SaaS side. Applying the capability-vs-service test
+properly: a *single-user, single-machine, read-only* UI is a capability →
+OSS. The SaaS surface is the *collaboration* dashboard: multi-user review,
+comments/approvals, RBAC/SSO, audit, org lineage, hosted branch endpoints.
+This local UI is the seed of that dashboard, not a substitute for it.
+
 ## Non-goals
 
 Writes through the proxy (ever, for individuals — that's the merge gate's
