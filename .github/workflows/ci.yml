@@ -19,9 +19,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install
-        run: |
-          uv venv
-          uv pip install -e ".[dev,mcp]"
+        # setup-uv's python-version input already created .venv (VIRTUAL_ENV);
+        # uv pip targets it automatically.
+        run: uv pip install -e ".[dev,mcp]"
       - name: Lint
         run: uv run ruff check src/reble/ tests/
       - name: Test
