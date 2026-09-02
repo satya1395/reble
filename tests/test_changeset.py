@@ -92,7 +92,7 @@ def test_changeset_lifecycle_without_git(agent_project):
 
 def test_hash_baseline_fallback_on_new_changeset(agent_project):
     """A second change-set resuming the same data branch stays incremental."""
-    cat = _seed(agent_project)
+    _seed(agent_project)
     runner.invoke(app, ["run", "--change-set", "one", "--models", "stg_orders,mart_orders"])
 
     # edit stg_orders, then run under a brand-new change-set id
