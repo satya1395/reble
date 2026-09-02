@@ -50,10 +50,14 @@ class PromoteRecord:
 
 
 class Promoter:
-    def __init__(self, cfg, catalog, reble_dir: Path):
+    def __init__(self, cfg, catalog, reble_dir: Path, persist=None):
+        """`persist` is called after each per-table state mutation so a promote
+        interrupted mid-loop resumes without misreading stale base heads as
+        drift (and without re-executing already-promoted models)."""
         self.cfg = cfg
         self.catalog = catalog
         self.reble_dir = reble_dir
+        self._persist = persist
 
     def preflight(self, branch_state) -> list[DriftReport]:
         reports: list[DriftReport] = []
@@ -70,6 +74,13 @@ class Promoter:
         record_path = self.reble_dir / "promote.json"
         record = self._load_record(record_path, branch_state.data_branch)
 
+        def advance(table_id: str, head: int) -> None:
+            # The table's base is now main itself — update before anything
+            # can observe stale state.
+            branch_state.base_heads[table_id] = head
+            if self._persist:
+                self._persist()
+
         results: dict[str, dict] = {}
         for table_id in sorted(branch_state.base_heads):
             status = record.tables.get(table_id, {}).get("status")
@@ -83,6 +94,8 @@ class Promoter:
                     results[table_id] = {"status": "skipped", "reason": "no branch head"}
                 elif branch_head == main_head:
                     results[table_id] = {"status": "up-to-date"}
+                    if main_head is not None:
+                        advance(table_id, main_head)
                 else:
                     table = self.catalog.load_table(table_id)
                     if not ice.is_fast_forward(table, branch_state.base_ref, branch_state.data_branch):
@@ -91,6 +104,7 @@ class Promoter:
                     else:
                         ice.fast_forward(self.catalog, table_id, branch_state.base_ref, branch_head)
                         results[table_id] = {"status": "promoted", "snapshot": branch_head}
+                        advance(table_id, branch_head)
             except Exception as exc:  # noqa: BLE001
                 results[table_id] = {"status": "failed", "reason": str(exc)}
             record.tables[table_id] = results[table_id]

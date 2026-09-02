@@ -638,7 +638,9 @@ def promote_cmd(
     data_branch = ctx.data_branch_for(git_branch)
     st = ctx.branch_state(git_branch, data_branch)
 
-    promoter = Promoter(ctx.cfg, ctx.catalog, ctx.reble_dir)
+    promoter = Promoter(
+        ctx.cfg, ctx.catalog, ctx.reble_dir, persist=lambda: ctx.store.save(ctx.state)
+    )
     reports = promoter.preflight(st)
     drifted = [r for r in reports if r.drifted]
 
@@ -728,19 +730,18 @@ def promote_cmd(
                 promote_diff[table_id] = {"error": str(exc)}
 
     results = promoter.promote(st, ff_only=ff_only)
+    # The promoter advanced base heads per table (and persisted via callback);
+    # persist once more so any non-table state is durable even on partial failure.
+    ctx.store.save(ctx.state)
     if all(r.get("status") != "failed" for r in results.values()):
-        # Fully promoted: the branch's bases now equal main. Refresh pins and
-        # base heads so `reble status` is clean (the branch epoch advances to
-        # the promote point).
+        # Fully promoted: the branch's pins advance to main too, so
+        # `reble status` is clean (the branch epoch advances to the promote
+        # point). Base heads were already advanced per table.
         for pin in st.pins.values():
             head = get_head(ctx.catalog, pin.table, st.base_ref)
             if head is not None:
                 pin.snapshot_id = head
                 pin.base_snapshot_id = head
-        for table_id in list(st.base_heads):
-            head = get_head(ctx.catalog, table_id, st.base_ref)
-            if head is not None:
-                st.base_heads[table_id] = head
         ctx.store.save(ctx.state)
     if _show_text(json_output, quiet):
         typer.echo("promote complete (per-table fast-forwards; no merge, ever)")
