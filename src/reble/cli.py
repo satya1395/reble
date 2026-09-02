@@ -352,6 +352,50 @@ def diff_cmd(
     _emit(env, json_output)
 
 
+# ------------------------------------------------------------------ estimate
+
+
+@app.command()
+@_run_guard
+def estimate(
+    models: str | None = typer.Option(None, "--models", help="Comma-separated model names"),
+    depth: int | None = typer.Option(None, "--depth", help="Cap downstream cascade"),
+    change_set: str | None = typer.Option(None, "--change-set", help="Change-set id"),
+    branch: str | None = typer.Option(None, "--branch", help="Explicit data branch"),
+    profile: str | None = typer.Option(None, "--profile"),
+    json_output: bool = typer.Option(False, "--json"),
+    quiet: bool = typer.Option(False, "--quiet"),
+    config_path: Path | None = typer.Option(None, "--config"),
+):
+    """Rough cost estimate before running: models to run, rows and bytes to read.
+
+    Local and honest about being rough — from Iceberg snapshot summaries
+    only, nothing scanned. Accurate estimation is deliberately not a goal.
+    """
+    core = _core(config_path, profile)
+    env = _invoke(
+        core.estimate,
+        json_output,
+        models=models,
+        depth=depth,
+        change_set=change_set,
+        branch=branch,
+    )
+    if _show_text(json_output, quiet) and "tables" in env["data"]:
+        data = env["data"]
+        typer.echo(
+            f"models to run: {data['models']}   "
+            f"est read: {data['est_bytes_read']:,} bytes, "
+            f"{data['est_input_rows']:,} input rows"
+        )
+        for t in data["tables"]:
+            typer.echo(
+                f"  {t['table']} ({t['role']}): {t['records']:,} rows, {t['bytes']:,} bytes"
+            )
+        typer.secho("rough: from snapshot summaries only", fg=typer.colors.YELLOW)
+    _emit(env, json_output)
+
+
 # -------------------------------------------------------------------- status
 
 

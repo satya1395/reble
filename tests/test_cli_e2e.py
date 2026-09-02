@@ -248,3 +248,29 @@ def test_discard_refuses_during_promote(project, seeded_catalog):
     _invoke("run")
     (project / ".reble" / "promote.json").write_text('{"branch": "fix_orders"}')
     _invoke("branch", "discard", "fix_orders", "--yes", expect=1)
+
+
+def test_estimate_reports_scope_and_inputs(project, seeded_catalog):
+    runner.invoke(app, ["run"])
+    result = runner.invoke(app, ["--json", "estimate"])
+    assert result.exit_code == 0, result.stdout
+    env = json.loads(result.stdout)
+    data = env["data"]
+    assert data["models"] == 3
+    roles = {t["table"]: t["role"] for t in data["tables"]}
+    assert roles["analytics.raw_events"] == "input"
+    assert roles["analytics.stg_orders"] == "scope"
+    assert data["est_bytes_read"] > 0
+    assert any("rough" in w for w in env["warnings"])
+    # per-table numbers come from snapshot summaries (rows > 0 for materialized tables)
+    stg = next(t for t in data["tables"] if t["table"].endswith("stg_orders"))
+    assert stg["records"] == 3
+
+
+def test_estimate_empty_scope(project, seeded_catalog):
+    import subprocess
+
+    subprocess.run(["git", "checkout", "--", "models"], cwd=project, check=True, capture_output=True)
+    result = runner.invoke(app, ["--json", "estimate"])
+    assert result.exit_code == 0, result.stdout
+    assert json.loads(result.stdout)["data"]["status"] == "empty scope"

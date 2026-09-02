@@ -84,6 +84,19 @@ def _jsonable(obj):
     return json.loads(json.dumps(obj, default=str))
 
 
+def _snapshot_summary(table, snapshot_id: int) -> dict:
+    """{records, bytes} from the snapshot summary; zeros if absent."""
+    try:
+        snapshot = table.snapshot_by_id(snapshot_id)
+        props = dict(snapshot.summary.additional_properties or {}) if snapshot else {}
+    except Exception:  # noqa: BLE001
+        props = {}
+    return {
+        "records": int(props.get("total-records", 0)),
+        "bytes": int(props.get("total-files-size", 0)),
+    }
+
+
 class Reble:
     """One instance per project (+ optional profile). Verbs return envelopes."""
 
@@ -436,6 +449,105 @@ class Reble:
             data={"tables": out},
             branch=branch_env(git_branch, data_branch, changeset_id),
             warnings=warnings,
+        )
+
+    def estimate(
+        self,
+        models: list[str] | str | None = None,
+        depth: int | None = None,
+        change_set: str | None = None,
+        branch: str | None = None,
+    ) -> dict:
+        """Rough, local cost estimate from Iceberg metadata only.
+
+        Honest about being rough (spec: accurate estimation is a non-goal):
+        per scope table and pinned input, snapshot summaries give row counts
+        and file bytes — nothing is scanned. Bytes estimate what a run+diff
+        will read: pinned inputs (base) plus branch and base of each scope
+        table.
+        """
+        changeset_id, _ = self.changeset(change_set)
+        git_branch = self.git_branch
+        data_branch = self.data_branch_for(changeset_id, explicit_branch=branch)
+        graph = self.graph()
+        st = self.state.branches.get(changeset_id) or self._state_by_branch(data_branch)
+
+        edited, _ = self.edited_models(graph, st, data_branch)
+        if models:
+            if isinstance(models, str):
+                models = [m.strip() for m in models.split(",") if m.strip()]
+            edited = list(models)
+        scope = compute_scope(graph, edited, depth=depth)
+
+        if scope.is_empty:
+            return envelope.envelope(
+                "estimate",
+                ok=True,
+                data={"models": 0, "status": "empty scope"},
+                branch=branch_env(git_branch, data_branch, changeset_id),
+            )
+
+        tables = []
+        est_bytes = 0
+        est_input_rows = 0
+
+        def measure(table_id: str, role: str) -> None:
+            nonlocal est_bytes, est_input_rows
+            try:
+                table = self.catalog.load_table(table_id)
+            except Exception:  # noqa: BLE001 — not materialized yet
+                tables.append({"table": table_id, "role": role, "records": 0, "bytes": 0,
+                               "note": "not materialized yet"})
+                return
+            snapshot_ids = []
+            if role == "scope":
+                snapshot_ids = [
+                    sid for sid in (
+                        get_ref_snapshot(table, data_branch),
+                        get_ref_snapshot(table, st.base_ref if st else self.cfg.warehouse.default_base),
+                    ) if sid is not None
+                ]
+            else:
+                sid = get_ref_snapshot(
+                    table, st.base_ref if st else self.cfg.warehouse.default_base
+                )
+                snapshot_ids = [sid] if sid is not None else []
+            records = 0
+            size = 0
+            seen: set[int] = set()
+            for sid in snapshot_ids:
+                if sid in seen:
+                    continue
+                seen.add(sid)
+                summary = _snapshot_summary(table, sid)
+                records += summary.get("records", 0)
+                size += summary.get("bytes", 0)
+            est_bytes += size
+            if role == "input":
+                est_input_rows += records
+            tables.append({"table": table_id, "role": role, "records": records, "bytes": size})
+
+        for model in scope.scope:
+            measure(table_for_model(self.cfg, model), "scope")
+        for rel in sorted(scope.pinned_inputs):
+            measure(relation_id(self.cfg, rel), "input")
+
+        return envelope.envelope(
+            "estimate",
+            ok=True,
+            data={
+                "models": len(scope.scope),
+                "tables": tables,
+                "est_bytes_read": est_bytes,
+                "est_input_rows": est_input_rows,
+            },
+            branch=branch_env(git_branch, data_branch, changeset_id),
+            warnings=[
+                (
+                    "rough estimate from snapshot summaries; file-level stats and "
+                    "predicate pushdown not accounted for"
+                )
+            ],
         )
 
     def status(self, change_set: str | None = None, branch: str | None = None) -> dict:
