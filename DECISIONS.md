@@ -190,3 +190,28 @@ replacement increment: read run inputs and diffs through DuckDB's
 `memory_limit`, configurable via `engines.duckdb`), and make `reble estimate`
 report diff bytes up front. Trino becomes a read adapter added on customer
 pull — the engine interface already accommodates it.
+
+## 19. Lazy reads via iceberg_scan; correctness pinned to snapshot ids
+
+Run inputs and diffs stream through duckdb's `iceberg_scan(...,
+snapshot_from_id=<id>)` (out-of-core, spilling under
+`engines.duckdb.memory_limit`, default temp dir `.reble/spill`) instead of
+materializing via pyiceberg → arrow. Per-table fallback to arrow on any
+extension failure, surfaced as envelope warnings.
+
+pyiceberg's UUID metadata filenames are inexpressible in duckdb-iceberg's
+`version`/`version_name_format`, so the extension globs the latest metadata
+under `unsafe_enable_version_guessing`. That flag is acceptable here and
+only here: callers pin the **catalog-committed snapshot id** resolved from
+refs/tags — snapshots are immutable and cumulative, so a pinned id reads
+identically regardless of which metadata file enumerates it. Writes stay in
+pyiceberg (branch refs + provenance snapshot-properties; duckdb-iceberg
+writes would drop both).
+
+Measured (benchmarks/duckdb_scale.py, M-series laptop, sqlite+file
+warehouse): branch create on a 5M-row table is metadata-only (<10 ms);
+scoped run and keyed diff of two 2-model scope over 5M input rows complete
+in ~0.7-0.9 s per pass in **both** read modes with **identical diff
+results** — the lazy path's value is memory bounding (streams + spills
+instead of whole-snapshot materialization, honoring `memory_limit`), not
+wall time at laptop scale.

@@ -52,6 +52,7 @@ reble.yml            # project config — versioned in git
   runs/<id>/         # run manifests: scope, pins, engine, timings, results
                      #   (results carry the model SQL bundle — provenance)
   promote.json       # re-entrant promote record (per-table fast-forward status)
+  spill/             # duckdb temp directory when memory_limit is exceeded
 ```
 
 `state.json` and everything under `.reble/` is machine-local. Change-set ids
@@ -88,7 +89,11 @@ diff:
   on_missing_key: hash      # hash (full-row compare + warning) | error
   max_rows_dumped: 1000     # applies to table AND json output; --full overridable
 engines:
-  duckdb: {}                # local dev + CI
+  duckdb:                   # local dev + CI
+    read_mode: auto         # auto (iceberg_scan streaming, arrow fallback) | arrow
+    memory_limit: 4GB       # duckdb spills to temp_directory beyond it
+    temp_directory: .reble/spill
+    settings: {}            # raw SET passthrough (e.g. s3 credentials)
   spark:
     provider: emr-serverless   # emr-serverless | glue | local | k8s
     application_id: ${EMR_APP_ID}
@@ -220,10 +225,13 @@ Expires TTL'd branches, drops orphan pin tags. `--before DURATION`
 `--dry-run`. Orphan pin tags block snapshot expiration on prod — GC is a
 correctness command, not hygiene.
 
-### `reble estimate` (v0.2)
+### `reble estimate`
 
-Rough local cost estimate. `--json`. Accurate estimation is a Cloud feature;
-local estimate is honest about being rough.
+Rough, local cost estimate from Iceberg snapshot summaries only (nothing
+scanned): models to run, per-table rows/bytes for scope tables and pinned
+inputs, summed bytes a run+diff will read. `--models` · `--depth` ·
+`--change-set` · `--branch` · `--json`. Warns about its own roughness by
+design; accurate estimation is deliberately not a goal.
 
 ## Event streams
 

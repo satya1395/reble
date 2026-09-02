@@ -109,6 +109,20 @@ reble gc --before 7
 Orphan pin tags block snapshot expiration on production tables — this is a
 correctness command, not hygiene.
 
+## reble estimate
+
+Rough cost estimate before running — from Iceberg snapshot summaries only,
+nothing scanned.
+
+```bash
+reble estimate                  # scope inferred from your edits
+reble estimate --models stg     # explicit scope
+```
+
+Models to run, per-table rows/bytes for scope tables and pinned inputs,
+summed bytes a run+diff will read. Warns about its own roughness by design
+— accurate estimation is deliberately not a goal.
+
 ## reble mcp
 
 Run the MCP server (stdio) — the same verbs as tools for AI agents.

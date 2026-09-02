@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0
+
+- **DuckDB read path at scale**: run inputs and diffs stream through
+  `iceberg_scan(snapshot_from_id=…)` — out-of-core, spilling under
+  `engines.duckdb.memory_limit` (default temp dir `.reble/spill`), with
+  per-table fallback to in-memory reads. Correctness stays pinned to
+  catalog-committed snapshot ids; identical results verified across modes
+  at 5M rows.
+- **`reble estimate`**: rough cost estimate from snapshot summaries —
+  models, per-table rows/bytes, summed read bytes; nothing scanned.
+- `engines.duckdb` config: `read_mode`, `memory_limit`, `temp_directory`,
+  `settings` (raw SET passthrough, e.g. s3 credentials).
+
 ## 0.2.1
 
 - Rewritten README pitch: concrete what/why/loop for data engineers.

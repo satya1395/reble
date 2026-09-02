@@ -84,7 +84,9 @@ infrastructure. A branch ref is metadata-only: zero bytes are copied.
 - **Pinned inputs** — upstream tables pinned with Iceberg **tags**
   (`reble_pin__*`) at run time; tags block `expire_snapshots`, so branch
   reads stay correct even while main moves.
-- **Row-level diffs** — computed on your compute via DuckDB.
+- **Row-level diffs** — computed on your compute via DuckDB, streaming
+  through `iceberg_scan` (out-of-core; spills under a configurable
+  `engines.duckdb.memory_limit`).
 - **Promote semantics** — fast-forward only when every pinned base still
   equals current main; otherwise a scoped re-run and a fresh, promote-time
   diff. The PR diff is advisory; the promote diff is authoritative.
@@ -132,10 +134,12 @@ under a new change-set.
 
 ## Status
 
-v0.2 — the full branch → run → diff → promote loop on DuckDB + pyiceberg,
-with change-set keying, event streams, catalog-side provenance, and the MCP
-tool surface for agents. Next: the DuckDB read path at scale
-(`iceberg_scan` + spill) and the Spark runner.
+v0.3 — the full branch → run → diff → promote loop on DuckDB + pyiceberg,
+with change-set keying, event streams, catalog-side provenance, the MCP
+tool surface for agents, streaming out-of-core reads
+(`iceberg_scan` + spill), and `reble estimate`. Branch creation is
+metadata-only — measured at <10 ms on a 5M-row table. Next: the Spark
+runner.
 
 ## License
 
