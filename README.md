@@ -95,8 +95,6 @@ change-set id; errors carry the spec exit codes as structured `error.code`
 
 ## Documentation
 
-- [`design notes`](design notes) — vision design notes: positioning, architecture, open-core
-  boundary, roadmap.
 - [`SPEC.md`](SPEC.md) — normative CLI specification (v0.2): invariants,
   on-disk layout, `reble.yml` schema, command reference, JSON envelope,
   event streams, provenance, exit codes.

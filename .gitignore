@@ -17,3 +17,5 @@ htmlcov/
 .reble/
 demo/
 dist/
+# internal strategy doc — not published
+design notes
