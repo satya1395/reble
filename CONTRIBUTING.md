@@ -16,6 +16,10 @@ Thanks for helping. The short version:
 - **Keep envelopes additive.** `--json` output and event records change
   additively within a minor version only.
 - **No secrets in reble.yml** — `${ENV_VAR}` interpolation only.
+- **CLA.** Contributions are accepted under the
+  [Contributor License Agreement](CLA.md) — state your agreement in your PR
+  ("I agree to the CLA"). It preserves Apache-2.0 for everyone while letting
+  the Maintainer also offer commercial terms.
 
 Setup:
 
