@@ -34,6 +34,7 @@ class RunResult:
     duration_ms: int = 0
     error: str | None = None
     ast_hash: str | None = None
+    sql: str | None = None  # SQL bundle — provenance for ran models
 
 
 class SparkEngine:
@@ -45,7 +46,10 @@ class SparkEngine:
         self.cfg = cfg
         self.catalog = catalog
 
-    def execute_model(self, model, graph, branch, base_ref, pin_tag, pin_inputs) -> RunResult:
+    def execute_model(
+        self, model, graph, branch, base_ref, pin_tag, pin_inputs,
+        run_id=None, changeset_id=None,
+    ) -> RunResult:
         return RunResult(
             model=model.name,
             status="error",
@@ -69,6 +73,8 @@ class DuckDbEngine:
         base_ref: str,
         pin_tag,  # Callable[[str], str] mapping relation name -> tag name
         pin_inputs: bool,
+        run_id: str | None = None,
+        changeset_id: str | None = None,
     ) -> RunResult:
         started = time.time()
         dialect = self.cfg.lineage.dialect
@@ -82,14 +88,25 @@ class DuckDbEngine:
         finally:
             con.close()
 
-        self._write(model, branch, out)
+        provenance = {
+            "reble.model": model.name,
+            "reble.ast_hash": ast_hash(model.sql, dialect),
+            "reble.branch": branch,
+        }
+        if run_id:
+            provenance["reble.run_id"] = run_id
+        if changeset_id:
+            provenance["reble.changeset"] = changeset_id
+
+        self._write(model, branch, out, provenance)
         return RunResult(
             model=model.name,
             status="ran",
             kind=model.kind,
             rows_written=out.num_rows,
             duration_ms=int((time.time() - started) * 1000),
-            ast_hash=ast_hash(model.sql, dialect),
+            ast_hash=provenance["reble.ast_hash"],
+            sql=model.sql,
         )
 
     def _register_inputs(
@@ -132,13 +149,21 @@ class DuckDbEngine:
 
         return tree.transform(substitute)
 
-    def _write(self, model: ModelNode, branch: str, out: pa.Table) -> None:
+    def _write(
+        self,
+        model: ModelNode,
+        branch: str,
+        out: pa.Table,
+        provenance: dict[str, str] | None = None,
+    ) -> None:
         """CTAS semantics: overwrite the branch head; create the table if new.
 
         Never writes real data to the base ref. A snapshot-less table cannot
         take a branch write in Iceberg, so new models are seeded with one
-        zero-row snapshot on main, branched, then written on the branch —
-        main stays empty until promote.
+        zero-row snapshot on main (marked `reble.seed`), branched, then
+        written on the branch — main stays empty until promote. Provenance
+        keys ride the snapshot summary, so they travel with the snapshot to
+        main at promote time.
         """
         import warnings
 
@@ -167,7 +192,8 @@ class DuckDbEngine:
             )
 
         if not table.metadata.snapshots:
-            table.append(out.slice(0, 0))  # zero-row seed snapshot on main
+            seed_props = {**(provenance or {}), "reble.seed": "true"}
+            table.append(out.slice(0, 0), snapshot_properties=seed_props)  # zero-row seed on main
             table = self.catalog.load_table(table_id)
             table.manage_snapshots().create_branch(
                 snapshot_id=table.metadata.current_snapshot_id, branch_name=branch
@@ -178,4 +204,4 @@ class DuckDbEngine:
         # overwrite below is that full refresh — announced by the caller.
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="Delete operation did not match any records")
-            table.overwrite(out, branch=branch)
+            table.overwrite(out, snapshot_properties=provenance, branch=branch)

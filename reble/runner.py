@@ -152,6 +152,8 @@ class Runner:
                 base_ref=base_ref,
                 pin_tag=lambda t: tag_name(self.cfg, branch, t),
                 pin_inputs=self.cfg.branching.pin_inputs,
+                run_id=manifest.run_id,
+                changeset_id=changeset_id,
             )
             manifest.results.append(result)
             ran_this_run.add(model_name)
