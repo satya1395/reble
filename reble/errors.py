@@ -14,14 +14,20 @@ EXIT_INTERRUPTED = 130
 
 
 class RebleError(Exception):
-    """Base error carrying the spec exit code."""
+    """Base error carrying the spec exit code.
+
+    `payload` optionally holds the full JSON envelope for failures that still
+    produce output (run with model errors, status drift): adapters emit or
+    return the payload, then translate exit_code for their frontend.
+    """
 
     exit_code = EXIT_ERROR
 
-    def __init__(self, message: str, exit_code: int | None = None):
+    def __init__(self, message: str, exit_code: int | None = None, payload: dict | None = None):
         super().__init__(message)
         if exit_code is not None:
             self.exit_code = exit_code
+        self.payload = payload
 
 
 class ConfigError(RebleError):

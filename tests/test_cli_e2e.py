@@ -204,7 +204,8 @@ def test_promote_with_drift_reruns_and_promotes(project, seeded_catalog):
         pa.table({"order_id": [4], "amount": [40.0]})
     )
     result = _invoke("promote")
-    assert "drift on" in result.stdout
+    # drift announce is an envelope warning → stderr in text mode
+    assert "drift on" in (result.stdout + getattr(result, "stderr", ""))
     # the new row flowed through the re-run into main
     rows = seeded_catalog.load_table("analytics.mart_orders").scan().to_arrow().to_pylist()
     assert {r["order_id"] for r in rows} == {1, 2, 3, 4}
