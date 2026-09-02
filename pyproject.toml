@@ -1,0 +1,62 @@
+[project]
+name = "reble"
+version = "0.1.0"
+description = "Git-style branching for Iceberg data warehouses: scoped branches, row-level diffs, fast-forward promotion."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Reble contributors" }]
+keywords = ["iceberg", "dbt", "branching", "data-engineering", "lakehouse"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Database",
+]
+dependencies = [
+    "typer>=0.12",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "sqlglot>=25.0",
+    "pyiceberg[sql-sqlite,pyarrow]>=0.8",
+    "duckdb>=1.0",
+    "rich>=13.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "pre-commit>=3.7",
+]
+
+[project.scripts]
+reble = "reble.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["reble"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# B008: Typer's documented pattern is function calls in argument defaults
+# S110/S112: deliberate try/except-continue tolerance of per-table catalog errors
+extend-select = ["B"]
+ignore = ["S110", "S112"]
+
+[tool.ruff.lint.per-file-ignores]
+"reble/cli.py" = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

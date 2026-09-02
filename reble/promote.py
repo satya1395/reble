@@ -1,0 +1,147 @@
+"""`reble promote` (invariants 7, 8) and `reble gc`.
+
+Preflight checks two drift signals per branch:
+  - input pins: pinned snapshot ≠ current main head → inputs moved
+  - base heads: a scope table's main head ≠ the head it was branched from
+    → someone wrote to main inside the blast radius
+Clean → per-table fast-forwards (atomic only on a reble catalog — labeled in
+output). Drifted without --ff-only → re-pin, re-run scope, fresh promote-time
+diff, then fast-forward. --ff-only refuses (exit 4).
+
+No three-way merges. Ever. promote (fast-forward or re-run) or discard.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from . import catalog as ice
+
+
+@dataclass
+class DriftReport:
+    table: str
+    kind: str  # "pin" | "base"
+    pinned_base: int | None
+    current_main: int | None
+
+    @property
+    def drifted(self) -> bool:
+        return self.pinned_base != self.current_main
+
+
+@dataclass
+class PromoteRecord:
+    branch: str
+    started_at: float = field(default_factory=time.time)
+    tables: dict[str, dict] = field(default_factory=dict)
+    # status: pending | promoted | failed — re-entrant: an interrupted promote
+    # resumes, never double-applies.
+
+    def to_dict(self) -> dict:
+        return {"branch": self.branch, "started_at": self.started_at, "tables": self.tables}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> PromoteRecord:
+        return cls(**data)
+
+
+class Promoter:
+    def __init__(self, cfg, catalog, reble_dir: Path):
+        self.cfg = cfg
+        self.catalog = catalog
+        self.reble_dir = reble_dir
+
+    def preflight(self, branch_state) -> list[DriftReport]:
+        reports: list[DriftReport] = []
+        for pin in branch_state.pins.values():
+            current = ice.get_head(self.catalog, pin.table, branch_state.base_ref)
+            reports.append(DriftReport(pin.table, "pin", pin.snapshot_id, current))
+        for table_id, base in branch_state.base_heads.items():
+            current = ice.get_head(self.catalog, table_id, branch_state.base_ref)
+            reports.append(DriftReport(table_id, "base", base, current))
+        return reports
+
+    def promote(self, branch_state, ff_only: bool = False) -> dict:
+        """Per-table fast-forwards; re-entrant state in .reble/promote.json."""
+        record_path = self.reble_dir / "promote.json"
+        record = self._load_record(record_path, branch_state.data_branch)
+
+        results: dict[str, dict] = {}
+        for table_id in sorted(branch_state.base_heads):
+            status = record.tables.get(table_id, {}).get("status")
+            if status == "promoted":
+                results[table_id] = {"status": "promoted (resumed)"}
+                continue
+            try:
+                branch_head = ice.get_head(self.catalog, table_id, branch_state.data_branch)
+                main_head = ice.get_head(self.catalog, table_id, branch_state.base_ref)
+                if branch_head is None:
+                    results[table_id] = {"status": "skipped", "reason": "no branch head"}
+                elif branch_head == main_head:
+                    results[table_id] = {"status": "up-to-date"}
+                else:
+                    table = self.catalog.load_table(table_id)
+                    if not ice.is_fast_forward(table, branch_state.base_ref, branch_state.data_branch):
+                        # main diverged from the branch point — refuse, never merge
+                        results[table_id] = {"status": "failed", "reason": "non-fast-forward"}
+                    else:
+                        ice.fast_forward(self.catalog, table_id, branch_state.base_ref, branch_head)
+                        results[table_id] = {"status": "promoted", "snapshot": branch_head}
+            except Exception as exc:  # noqa: BLE001
+                results[table_id] = {"status": "failed", "reason": str(exc)}
+            record.tables[table_id] = results[table_id]
+            self._save_record(record_path, record)
+
+        terminal = ("promoted", "up-to-date", "promoted (resumed)", "skipped")
+        if all(r.get("status") in terminal for r in results.values()):
+            record_path.unlink(missing_ok=True)
+        return results
+
+    @staticmethod
+    def _load_record(path: Path, branch: str) -> PromoteRecord:
+        if path.exists():
+            try:
+                data = json.loads(path.read_text())
+                if data.get("branch") == branch:
+                    return PromoteRecord.from_dict(data)
+            except json.JSONDecodeError:
+                pass
+        return PromoteRecord(branch=branch)
+
+    @staticmethod
+    def _save_record(path: Path, record: PromoteRecord) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record.to_dict(), indent=2))
+
+
+def orphan_pin_tags(catalog, cfg, active_tags: set[str]) -> list[tuple[str, str]]:
+    """Pin tags on catalog tables that no active branch claims (gc correctness)."""
+    orphans: list[tuple[str, str]] = []
+    prefix = cfg.branching.tag_prefix
+    for table_id in _list_tables(catalog):
+        try:
+            table = catalog.load_table(table_id)
+            refs = table.refs()
+        except Exception:  # noqa: BLE001
+            continue
+        for ref_name in refs:
+            if ref_name.startswith(prefix) and ref_name not in active_tags:
+                orphans.append((table_id, ref_name))
+    return orphans
+
+
+def _list_tables(catalog) -> list[str]:
+    out: list[str] = []
+    try:
+        for ns in catalog.list_namespaces():
+            out.extend(catalog.list_tables(ns))
+    except Exception:  # noqa: BLE001 — catalogs vary in namespace listing support
+        try:
+            out.extend(catalog.list_tables())
+        except Exception:  # noqa: BLE001
+            pass
+    return out
