@@ -20,6 +20,7 @@ from .config import ConfigLoader, assert_no_secrets
 from .diff import diff_arrow, resolve_keys
 from .engine import DuckDbEngine, SparkEngine
 from .errors import EXIT_DRIFT, EXIT_ERROR, ConfigError, EmptyScope, RebleError
+from .events import ndjson_emitter
 from .gitinfo import (
     base_commit,
     current_branch,
@@ -228,7 +229,7 @@ def _print_version(value: bool):
 
 # Global flags set by the root callback — spec: "Global flags on every
 # command". A command-local flag ORs with the global one.
-_FLAGS = {"json": False, "quiet": False}
+_FLAGS = {"json": False, "quiet": False, "ndjson": False}
 
 
 def _as_json(local: bool) -> bool:
@@ -274,7 +275,10 @@ def _manifest_hashes(manifest_path: Path) -> dict[str, str]:
 
 def _emit(env: dict, as_json: bool) -> None:
     if _as_json(as_json):
-        typer.echo(json.dumps(env, indent=2, default=str))
+        if _FLAGS.get("ndjson"):
+            typer.echo(json.dumps(env, default=str))  # one line: NDJSON-compatible
+        else:
+            typer.echo(json.dumps(env, indent=2, default=str))
     else:
         # Text mode prints scalar summaries only; structures go to --json
         for key, value in env["data"].items():
@@ -396,12 +400,18 @@ def run(
     branch: str | None = typer.Option(
         None, "--branch", help="Explicit data branch (resume an existing branch under this change-set)"
     ),
+    events: bool = typer.Option(
+        False, "--events", help="Stream NDJSON run events on stdout (implies machine mode)"
+    ),
     profile: str | None = typer.Option(None, "--profile"),
     json_output: bool = typer.Option(False, "--json"),
     quiet: bool = typer.Option(False, "--quiet"),
     config_path: Path | None = typer.Option(None, "--config"),
 ):
     """Resolve scope, create/update the data branch, pin inputs, execute."""
+    if events:
+        _FLAGS["json"] = True  # --events implies machine mode
+        _FLAGS["ndjson"] = True  # envelope prints as one line: pure NDJSON stream
     ctx = Context(config_path, profile)
     if engine_name == "spark":
         ctx.engine = SparkEngine(ctx.cfg, ctx.catalog)
@@ -469,7 +479,14 @@ def run(
         )
         return
 
-    manifest = runner.run(data_branch, scope, st.base_ref, st.model_hashes)
+    manifest = runner.run(
+        data_branch,
+        scope,
+        st.base_ref,
+        st.model_hashes,
+        changeset_id=changeset_id,
+        on_event=ndjson_emitter("run") if events else None,
+    )
 
     # Record execution hashes, input pins, and scope-table base heads.
     st.model_hashes.update(
@@ -561,12 +578,19 @@ def diff_cmd(
     full: bool = typer.Option(False, "--full", help="Ignore max_rows_dumped"),
     change_set: str | None = typer.Option(None, "--change-set", help="Change-set id"),
     branch: str | None = typer.Option(None, "--branch", help="Explicit data branch"),
+    events: bool = typer.Option(
+        False, "--events", help="Stream NDJSON diff events on stdout (implies machine mode)"
+    ),
     profile: str | None = typer.Option(None, "--profile"),
     json_output: bool = typer.Option(False, "--json"),
     quiet: bool = typer.Option(False, "--quiet"),
     config_path: Path | None = typer.Option(None, "--config"),
 ):
     """Row-level + schema diff of scope tables (exit 7 if key required and missing)."""
+    if events:
+        _FLAGS["json"] = True
+        _FLAGS["ndjson"] = True
+    emit_diff = ndjson_emitter("diff") if events else None
     ctx = Context(config_path, profile)
     changeset_id, _ = ctx.changeset(change_set)
     git_branch = ctx.git_branch
@@ -584,6 +608,8 @@ def diff_cmd(
 
     out = []
     for name in targets:
+        if emit_diff:
+            emit_diff("diff.table.begin", table=name)
         table_id = relation_id(ctx.cfg, name)
         table = ctx.catalog.load_table(table_id)
         branch_snap = get_ref_snapshot(table, data_branch)
@@ -608,6 +634,14 @@ def diff_cmd(
         else:
             d = diff_arrow(table_id, base_data, branch_data, keys, max_rows_dumped=max_rows)
         out.append(d.to_dict())
+        if emit_diff:
+            emit_diff(
+                "diff.table.end",
+                table=table_id,
+                added=d.added_count,
+                removed=d.removed_count,
+                changed=d.changed_count,
+            )
 
     _emit(
         envelope.envelope(

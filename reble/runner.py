@@ -15,6 +15,7 @@ from pathlib import Path
 from . import catalog as ice
 from .config import Config
 from .engine import RunResult
+from .events import EventCallback, noop_emitter
 from .lineage import Graph, ast_hash
 from .relations import relation_id, table_for_model, tag_name
 from .scope import ScopePlan
@@ -78,6 +79,8 @@ class Runner:
         base_ref: str,
         previous_hashes: dict[str, str] | None = None,
         repin: bool = False,
+        changeset_id: str | None = None,
+        on_event: EventCallback | None = None,
     ) -> RunManifest:
         """Execute the scope on the data branch.
 
@@ -93,6 +96,15 @@ class Runner:
             scope=scope,
         )
         previous_hashes = previous_hashes or {}
+        emit = on_event or noop_emitter()
+        emit(
+            "run.begin",
+            branch=branch,
+            changeset=changeset_id,
+            edited=scope.edited,
+            downstream=scope.downstream,
+            pinned_inputs=sorted(scope.pinned_inputs),
+        )
 
         # 1. Branch-first: zero-copy refs on every scope table that exists on
         #    the base ref. Tables that exist but have no snapshots yet (created
@@ -130,7 +142,9 @@ class Runner:
             parents_ran = bool(self.graph.parents_of(model_name) & scope_set & ran_this_run)
             if hash_unchanged and not parents_ran:
                 manifest.results.append(RunResult(model=model_name, status="skipped", kind=model.kind))
+                emit("model.end", model=model_name, status="skipped", kind=model.kind)
                 continue
+            emit("model.start", model=model_name, kind=model.kind)
             result = self.engine.execute_model(
                 model=model,
                 graph=self.graph,
@@ -141,8 +155,23 @@ class Runner:
             )
             manifest.results.append(result)
             ran_this_run.add(model_name)
+            emit(
+                "model.end",
+                model=model_name,
+                status=result.status,
+                kind=result.kind,
+                rows_written=result.rows_written,
+                duration_ms=result.duration_ms,
+                error=result.error,
+            )
 
         manifest.duration_ms = int((time.time() - manifest.started_at) * 1000)
+        emit(
+            "run.end",
+            run_id=manifest.run_id,
+            ok=all(r.status != "error" for r in manifest.results),
+            duration_ms=manifest.duration_ms,
+        )
         self._write_manifest(manifest)
         _ = repin  # pin_snapshot() above retargets when tags exist; epoch pins are the default path
         return manifest
