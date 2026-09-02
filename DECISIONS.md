@@ -175,3 +175,16 @@ The spec exit-code table stays normative for process exits. MCP tools
 return `{"ok": false, "error": {"code": <exit code>, ...}}` with any
 partial envelope, because agents branch on structured fields, not shells.
 Same codes, two encodings.
+
+## 18. No Trino (for now): DuckDB read path at scale (supersedes the v1.5 Trino line)
+
+Trino is dropped from the active roadmap. Rationale: it was only ever a read
+path (diffs/status on big tables); writes at scale remain Spark's job. Scoped
+branching keeps the diff working set small by design (blast radius, not
+warehouse), and our real bottleneck is feeding DuckDB via full pyiceberg →
+arrow materialization — not DuckDB, which has out-of-core execution. The
+replacement increment: read run inputs and diffs through DuckDB's
+`iceberg_scan()` (streams parquet from object storage, spills under
+`memory_limit`, configurable via `engines.duckdb`), and make `reble estimate`
+report diff bytes up front. Trino becomes a read adapter added on customer
+pull — the engine interface already accommodates it.

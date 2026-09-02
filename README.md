@@ -111,9 +111,10 @@ change-set id; errors carry the spec exit codes as structured `error.code`
 ## Status
 
 v0.1 — the full branch → run → diff → promote loop on DuckDB + pyiceberg,
-with change-set keying, event streams, and catalog-side provenance. Spark
-runner, Trino read path, and shadow-namespace mode are next; the editor
-cloud and MCP tool surface follow (see the design notes roadmap).
+with change-set keying, event streams, catalog-side provenance, and the MCP
+tool surface for agents. Next: the DuckDB read path at scale
+(`iceberg_scan` + spill), the Spark runner, and the editor cloud (see the
+design notes roadmap).
 
 ## License
 
