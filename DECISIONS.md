@@ -153,3 +153,25 @@ via callback) immediately after each per-table fast-forward. A resumed
 partial promote therefore neither misreads stale heads as drift nor
 re-executes already-promoted models.
 
+## 15. Core-first: one library, two adapters
+
+All orchestration lives in `reble/core.py` (`Reble` class); the CLI and the
+MCP server parse flags/params, call a verb, and render the returned
+envelope. Failures that still produce output raise `RebleError(payload=
+<envelope>)`. The acceptance bar for any core change is that the CLI test
+suite passes unchanged — the thin-client rule (design notes 5.1) made testable.
+
+## 16. Agent change-set protocol
+
+`reble_run` (MCP) without `change_set` generates `mcp-<uuid8>` and returns
+it top-level; agents thread it through status/diff/promote. Fresh
+change-sets on fresh branches declare `models` explicitly (bootstrap rule,
+§10); a new change-set on an existing branch (`--branch` / `branch`)
+inherits the hash baseline from the branch's last run manifest.
+
+## 17. Exit codes are a CLI concern; MCP gets structured errors
+
+The spec exit-code table stays normative for process exits. MCP tools
+return `{"ok": false, "error": {"code": <exit code>, ...}}` with any
+partial envelope, because agents branch on structured fields, not shells.
+Same codes, two encodings.

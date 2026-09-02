@@ -74,6 +74,25 @@ infrastructure. A branch ref is metadata-only: zero bytes are copied.
   equals current main; otherwise a scoped re-run and a fresh, promote-time
   diff. The PR diff is advisory; the promote diff is authoritative.
 
+## Agents (MCP)
+
+Any MCP host can drive the same verbs — the agent has no special powers:
+
+```json
+{
+  "mcpServers": {
+    "reble": {
+      "command": "reble-mcp",
+      "env": { "REBLE_PROJECT_DIR": "/path/to/project" }
+    }
+  }
+}
+```
+
+Install with `pip install 'reble[mcp]'`. `reble_run` generates and returns a
+change-set id; errors carry the spec exit codes as structured `error.code`
+(3 = drift, 4 = promote-blocked). Tool docstrings are the agent-facing spec.
+
 ## Documentation
 
 - [`design notes`](design notes) — vision design notes: positioning, architecture, open-core

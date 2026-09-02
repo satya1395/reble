@@ -242,6 +242,33 @@ In-process consumers (the editor) use the core callback API (`on_event`)
 instead of parsing stdout. Additive changes only within a major version of
 the events schema.
 
+## MCP tool surface
+
+The core verbs are exposed as MCP tools (`pip install reble[mcp]`, run
+`reble-mcp` or `reble mcp`, stdio transport). The MCP host configures the
+server with `REBLE_PROJECT_DIR` (project root containing reble.yml) and
+optional `REBLE_PROFILE`. Tools are thin wrappers over the same core the CLI
+uses — identical envelopes, no privileged path.
+
+| Tool | Verb | Hints |
+|---|---|---|
+| `reble_run(models?, depth?, dry_run?, change_set?, branch?)` | run | idempotent |
+| `reble_diff(tables?, against?, schema_only?, rows?, full?, change_set?, branch?)` | diff | read-only |
+| `reble_status(change_set?, branch?)` | status | read-only, idempotent |
+| `reble_promote(ff_only?, dry_run?, change_set?, branch?)` | promote | destructive |
+| `reble_branch_create / list / show / discard` | branch | discard destructive |
+| `reble_gc(dry_run?, before_days?)` | gc | destructive |
+
+**Agent change-set protocol:** `reble_run` without `change_set` generates one
+(`mcp-<id>`) and returns it as a top-level `changeset` field; agents pass it
+to every subsequent call. This is the agent-era replacement for "the git
+branch you're standing on."
+
+**Error mapping:** spec exit codes (§8) surface as structured error objects,
+not process exits: `{"ok": false, "error": {"code": 3, "message": ...}}`
+plus any partial envelope payload. Codes agents branch on: 2 config, 3
+drift, 4 promote-blocked, 5 empty scope, 6 lineage, 7 missing diff key.
+
 ## Provenance
 
 Every branch write records `reble.model`, `reble.ast_hash`,
