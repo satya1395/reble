@@ -1,5 +1,9 @@
 # Reble
 
+[![CI](https://github.com/satya1395/reble/actions/workflows/ci.yml/badge.svg)](https://github.com/satya1395/reble/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/reble)](https://pypi.org/project/reble/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 **The workspace where humans and AI agents change the lakehouse safely.**
 Every change runs on an isolated Iceberg branch and is accepted only after
 its consequences are visible.
@@ -12,6 +16,19 @@ The headline capability is **accept-with-consequences**: before you accept a
 change, Reble shows you the exact rows it adds, removes, and modifies. A code
 IDE can't do that; a lakehouse can, structurally — the branch already
 materialized the effect.
+
+```mermaid
+flowchart LR
+    M[("main<br/>(Iceberg tables)")]
+    E["edited SQL"] -->|"scope: AST-changed ∪<br/>downstream closure"| RUN["reble run"]
+    M -->|"upstream inputs pinned<br/>via Iceberg tags"| RUN
+    RUN -->|"zero-copy branch refs"| B[("data branch")]
+    B --> D["reble diff<br/>rows + schema"]
+    D --> P{"reble promote"}
+    P -->|"pinned bases still<br/>equal main"| FF["fast-forward main"]
+    P -->|"drift"| RR["scoped re-run +<br/>fresh promote-time diff"]
+    RR --> FF
+```
 
 ## Quick start
 
