@@ -16,7 +16,8 @@ no merges.
     The full loop works today — `init → run → diff → status → promote`, in
     git or standalone, with 75 passing tests on Linux and macOS. `pip install reble`
     and go. Feedback is by far the most valuable contribution right now —
-    [open a discussion](https://github.com/satya1395/reble/discussions).
+    [open a discussion](https://github.com/satya1395/reble/discussions) —
+    and the [docs site](/) you're reading is built from this repo.
 
 ## The problem
 
