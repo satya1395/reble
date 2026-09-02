@@ -151,8 +151,10 @@ executes.
 an existing data branch under this change-set) · `--events`
 
 Change-set resolution precedence: `--change-set` flag → `REBLE_CHANGE_SET`
-env → git branch (when `git_sync`). A model may skip execution only when its
-AST hash is unchanged AND no in-scope parent executed this run.
+env → git branch (when `git_sync`) → `local` (when `git_sync: false` —
+`reble init` sets this for git-less projects). A model may skip execution
+only when its AST hash is unchanged AND no in-scope parent executed this
+run.
 
 Dry-run output (also the pre-flight block of a real run):
 

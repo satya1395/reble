@@ -188,6 +188,14 @@ def init(
         "engines": {"duckdb": {}, "spark": {}},
         "compute_policy": {"prefer": engine},
     }
+    from .gitinfo import repo_root
+
+    if repo_root(root) is None:
+        raw["branching"] = {"git_sync": False}
+        assumptions.append(
+            "no git repository — wrote git_sync: false; work is keyed by the "
+            "'local' change-set (pass --change-set or git init to change that)"
+        )
     if catalog_type == "sql":
         # working local defaults: sqlite catalog + file warehouse
         raw["warehouse"]["catalog"].update(

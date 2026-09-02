@@ -108,10 +108,17 @@ def _catalog(project):
     )
 
 
-def test_no_changeset_is_config_error(agent_project):
+def test_no_changeset_defaults_to_local(agent_project):
+    """git_sync: false without an explicit change-set keys work as 'local'."""
     _seed(agent_project)
-    result = runner.invoke(app, ["run"])
-    assert result.exit_code == 2
+    import json
+
+    result = runner.invoke(app, ["run", "--models", "stg_orders"])
+    assert result.exit_code == 0, result.stdout
+    listing = json.loads(runner.invoke(app, ["--json", "branch", "list"]).stdout)
+    entry = next(b for b in listing["data"]["branches"] if b["data_branch"] == "local")
+    assert entry["changeset"] == "local"
+    assert entry["key_source"] == "default"
 
 
 def test_key_source_recorded(agent_project):

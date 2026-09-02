@@ -105,11 +105,12 @@ def test_structured_error_codes(mcp_env):
     assert blocked["ok"] is False
     assert blocked["error"]["code"] == 4
 
-    # no change-set resolvable in this env? REBLE_PROJECT_DIR set, git_sync
-    # false, no REBLE_CHANGE_SET → status without change_set is code 2
-    missing = reble_status()
-    assert missing["ok"] is False
-    assert missing["error"]["code"] == 2
+    # without an explicit change-set, git_sync:false projects resolve to the
+    # 'local' default — status succeeds (code-2 is now only a git_sync:true
+    # misconfiguration; the local default made standalone projects runnable)
+    default = reble_status()
+    assert default["ok"] is True
+    assert default["branch"]["changeset"] == "local"
 
 
 def test_server_smoke():

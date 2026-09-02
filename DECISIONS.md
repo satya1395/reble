@@ -109,7 +109,9 @@ tool. `reble estimate` remains v0.2.
 ## 10. Change-set keying (v0.2; supersedes invariant 2's git-first framing)
 
 The change-set id is the primary state key. Precedence: `--change-set` flag
-→ `REBLE_CHANGE_SET` env → git branch (when `git_sync`). Exactly one
+→ `REBLE_CHANGE_SET` env → git branch (when `git_sync`) → the `local`
+default when `git_sync: false` (standalone projects just work; `reble init`
+writes `git_sync: false` when no git repo is present). Exactly one
 change-set key drives a data branch per working copy; `--branch NAME` on any
 verb resumes an existing data branch under the current change-set.
 

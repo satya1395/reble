@@ -122,9 +122,12 @@ class Reble:
         git = self.git_branch
         if git is not None:
             return git, "git"
+        if not self.cfg.branching.git_sync:
+            # git-less local projects get a stable single-user change-set
+            return "local", "default"
         raise RebleError(
             "No change-set: pass --change-set NAME, set REBLE_CHANGE_SET, or "
-            "run inside a git branch with git_sync enabled",
+            "run inside a git branch (or set git_sync: false for the 'local' default)",
             exit_code=2,
         )
 
