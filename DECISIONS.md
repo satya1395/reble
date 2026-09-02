@@ -105,3 +105,51 @@ the pin/base-head comparison in §6.
 
 Three-way data merges (never), a storage engine, a governance catalog, a BI
 tool. `reble estimate` remains v0.2.
+
+## 10. Change-set keying (v0.2; supersedes invariant 2's git-first framing)
+
+The change-set id is the primary state key. Precedence: `--change-set` flag
+→ `REBLE_CHANGE_SET` env → git branch (when `git_sync`). Exactly one
+change-set key drives a data branch per working copy; `--branch NAME` on any
+verb resumes an existing data branch under the current change-set.
+
+**Bootstrap rule:** a fresh change-set on a fresh data branch with no
+`--models` gets an empty scope (invariant 6) — declare scope explicitly. The
+hash baseline for edited detection falls back to the data branch's last run
+manifest when the current key has no stored hashes, so a new change-set
+resuming an existing branch stays incremental.
+
+`BranchState.key_source` (git | explicit | env) records how the key was
+derived — additive field, no migration needed.
+
+## 11. Execution skip rule: inputs matter, not just SQL (v0.2 correctness fix)
+
+A scope model may skip a run only when BOTH its AST hash is unchanged AND no
+in-scope parent executed this run. The old rule (hash-only) wrongly skipped
+downstream models whose inputs had just been recomputed — unchanged SQL over
+changed inputs is a changed table.
+
+## 12. Event streams: library callback first, NDJSON adapter second
+
+The core calls an injected `on_event(name, **payload)`; the CLI `--events`
+flag serializes to NDJSON on stdout with the final envelope printed as one
+line (self-describing stream: event records carry `event`, the envelope
+doesn't). The events schema (`events: "1"`) versions independently of the
+envelope, additive-only within a major.
+
+## 13. Provenance lives in snapshot summary properties
+
+Not table properties — those aren't branch-scoped and would be clobbered
+across branches. Summary props (`reble.model`, `reble.ast_hash`,
+`reble.run_id`, `reble.changeset`, `reble.seed` on zero-row seeds) travel
+with the snapshot, so promoted main snapshots keep their code lineage. Full
+SQL text stays in run manifests to keep metadata small. Pin tags carry no
+metadata (the Iceberg API has none); the run manifest is their record.
+
+## 14. Promote resume advances base heads per table
+
+The promoter updates `base_heads[table]` to the promoted snapshot (persisting
+via callback) immediately after each per-table fast-forward. A resumed
+partial promote therefore neither misreads stale heads as drift nor
+re-executes already-promoted models.
+

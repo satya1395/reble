@@ -1,11 +1,13 @@
-# Reble CLI Specification — v0
+# Reble CLI Specification — v0.2
 
-Normative for v0.1. Anything not specified here is undefined behavior — pick
-a behavior and write it down in [`DECISIONS.md`](DECISIONS.md).
+Normative for v0.2.x. Anything not specified here is undefined behavior —
+pick a behavior and write it down in [`DECISIONS.md`](DECISIONS.md).
 
-This document incorporates the standalone-direction supersessions: no dbt
-dependency, plain-SQL model contract, SQLGlot-only lineage. Where the original
-chat-era spec was dbt-framed, this document is the authority.
+This document incorporates the standalone-direction supersessions (no dbt
+dependency, plain-SQL model contract, SQLGlot-only lineage) and the v0.2
+deltas from the vision design notes (§11): change-set keying, event streams, and
+provenance. Where the original chat-era spec was dbt- or git-framed, this
+document is the authority.
 
 ## 1. Load-bearing invariants
 
@@ -14,9 +16,10 @@ must justify itself in the description.
 
 1. Reble reads git, never runs git. `git_sync: false` must make reble 100%
    git-ignorant.
-2. One gesture, two artifacts. Data branch name is derived from the git
-   branch (sanitized). The mapping is recorded locally in
-   `.reble/state.json`.
+2. Work is keyed by change-set. The change-set id is the primary state key;
+   a git branch is one derivation adapter (`git_sync`), alongside an explicit
+   `--change-set` / `REBLE_CHANGE_SET` id. The change-set ↔ data-branch
+   mapping is recorded locally in `.reble/state.json`.
 3. Scope = AST-changed models ∪ downstream closure. Cosmetic edits
    (whitespace, comments, casing) hash identically on the canonical SQLGlot
    AST and never trigger a run.
@@ -44,16 +47,19 @@ must justify itself in the description.
 ```
 reble.yml            # project config — versioned in git
 .reble/              # machine-local state — gitignored (init adds the entry)
-  state.json         # git-branch ↔ data-branch mapping, branch epochs, pins,
-                     #   base heads, promote progress
+  state.json         # change-set ↔ data-branch mapping (keyed by change-set id;
+                     #   each entry records key_source: git | explicit | env),
+                     #   branch epochs, pins, base heads
   runs/<id>/         # run manifests: scope, pins, engine, timings, results
+                     #   (results carry the model SQL bundle — provenance)
   promote.json       # re-entrant promote record (per-table fast-forward status)
 ```
 
-`state.json` and everything under `.reble/` is machine-local. Two engineers
-on the same git branch get separate data branches named
-`<branch>__<user-suffix>` if a catalog name collision occurs
-(auto-suffixed, never silently shared).
+`state.json` and everything under `.reble/` is machine-local. Change-set ids
+are sanitized into data-branch names; a collision with another writer's
+branch auto-suffixes (`<name>__<user-suffix>`), never silently shared.
+`--branch` on any verb resumes an existing data branch under the current
+change-set.
 
 ## 3. reble.yml schema
 
@@ -141,7 +147,12 @@ The main verb. Resolves scope, creates/updates the data branch, pins inputs,
 executes.
 
 `--models m1,m2` · `--depth N` (cap cascade; deeper tables marked stale) ·
-`--dry-run` · `--yes` · `--engine NAME`
+`--dry-run` · `--engine NAME` · `--change-set ID` · `--branch NAME` (resume
+an existing data branch under this change-set) · `--events`
+
+Change-set resolution precedence: `--change-set` flag → `REBLE_CHANGE_SET`
+env → git branch (when `git_sync`). A model may skip execution only when its
+AST hash is unchanged AND no in-scope parent executed this run.
 
 Dry-run output (also the pre-flight block of a real run):
 
@@ -162,7 +173,8 @@ unchanged models).
 Row-level + schema diff of scope tables.
 
 `--against base|main` (default base = branch point; main = advisory "what
-would promote do") · `--schema-only` · `--rows N` · `--full`
+would promote do") · `--schema-only` · `--rows N` · `--full` ·
+`--change-set ID` · `--branch NAME` · `--events`
 
 Output per table: `+added / -removed / ~changed` counts, key columns used,
 sample rows, schema delta. Exit 7 if a table has no key and
@@ -212,24 +224,52 @@ correctness command, not hygiene.
 Rough local cost estimate. `--json`. Accurate estimation is a Cloud feature;
 local estimate is honest about being rough.
 
+## Event streams
+
+`run` and `diff` accept `--events`: NDJSON on stdout — one JSON object per
+line, followed by the final envelope printed as a single line. Every event
+record carries `events` (schema version, `"1"`), `reble` (CLI version),
+`command`, `event`, and `ts`; the final envelope carries no `event` field,
+so one stream is self-describing. `--events` implies machine mode (human
+text is suppressed).
+
+Events: `run.begin` (branch, changeset, scope) · `model.start` ·
+`model.end` (status, rows_written, duration_ms; skipped models emit
+`model.end` without a preceding `model.start`) · `run.end` (ok, run_id) ·
+`diff.table.begin` · `diff.table.end` (added/removed/changed).
+
+In-process consumers (the editor) use the core callback API (`on_event`)
+instead of parsing stdout. Additive changes only within a major version of
+the events schema.
+
+## Provenance
+
+Every branch write records `reble.model`, `reble.ast_hash`,
+`reble.branch`, `reble.run_id`, and `reble.changeset` in the snapshot's
+summary properties. Summaries travel with the snapshot: after promote,
+main's head snapshot still answers "which code produced this state" without
+touching git. Zero-row seed snapshots (new models) carry `reble.seed`. The
+full SQL bundle lives in the run manifest (`.reble/runs/<id>.json`), not the
+catalog — snapshot summaries stay small.
+
 ## 6. JSON envelope
 
 Every `--json` output uses one shape:
 
 ```json
 {
-  "reble": "0.1.0",
+  "reble": "0.2.0",
   "command": "status",
   "ok": true,
-  "branch": { "git": "fix-orders", "data": "fix_orders" },
+  "branch": { "git": "fix-orders", "data": "fix_orders", "changeset": "fix-orders" },
   "data": { },
   "warnings": ["mart_events: no diff key, full-hash compare"],
   "errors": []
 }
 ```
 
-Additive changes only within a minor version. Breaking envelope changes bump
-the major version.
+Additive changes only within a minor version (the `branch.changeset` field
+is one such addition). Breaking envelope changes bump the major version.
 
 ## 7. Exit codes
 
