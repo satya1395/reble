@@ -42,7 +42,23 @@ Write the project config and seed the upstream input table:
 
 ```bash
 reble init --catalog sql --namespace analytics
-python examples/orders-lakehouse/seed.py   # creates analytics.raw_events
+```
+
+```python title="seed.py"
+import pyarrow as pa, yaml
+from pyiceberg.catalog import load_catalog
+
+cfg = yaml.safe_load(open("reble.yml"))
+cat = load_catalog("reble", **cfg["warehouse"]["catalog"])
+cat.create_namespace_if_not_exists("analytics")
+cat.create_table(
+    "analytics.raw_events",
+    schema=pa.schema([("order_id", pa.int64()), ("amount", pa.float64())]),
+).append(pa.table({"order_id": [1, 2, 3], "amount": [10.0, 20.0, 30.0]}))
+```
+
+```bash
+python seed.py
 ```
 
 First run — a fresh project has no run history, so declare the scope
