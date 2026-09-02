@@ -2,46 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
 from typer.testing import CliRunner
 
 from reble.cli import app
 
 runner = CliRunner()
-
-
-@pytest.fixture()
-def agent_project(tmp_path, monkeypatch):
-    """Standalone project, git_sync: false, NO git repo — the agent case."""
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "models").mkdir()
-    (tmp_path / "warehouse").mkdir()
-    (tmp_path / "models" / "stg_orders.sql").write_text(
-        "-- kind: table\n-- key: order_id\n"
-        "select * from raw_events where amount > 15\n"
-    )
-    (tmp_path / "models" / "mart_orders.sql").write_text(
-        "-- kind: table\n-- key: order_id\n"
-        "select order_id, amount * 2 as amount_doubled from stg_orders\n"
-    )
-    (tmp_path / "reble.yml").write_text(
-        f"""
-version: 1
-warehouse:
-  catalog:
-    type: sql
-    uri: sqlite:///{tmp_path}/catalog.db
-    warehouse: file://{tmp_path}/warehouse
-  namespace: analytics
-  default_base: main
-branching:
-  git_sync: false
-lineage:
-  models_path: models
-  dialect: duckdb
-"""
-    )
-    return tmp_path
 
 
 def _seed(project):

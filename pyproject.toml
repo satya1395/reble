@@ -27,6 +27,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mcp = [
+    "mcp>=2.1",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -37,6 +40,7 @@ dev = [
 
 [project.scripts]
 reble = "reble.cli:app"
+reble-mcp = "reble.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]

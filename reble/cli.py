@@ -486,5 +486,18 @@ def gc(
     _emit(_invoke(core.gc, json_output, before_days, dry_run), json_output)
 
 
+@app.command()
+def mcp():
+    """Run the MCP server (stdio). Agent tools over the core verbs.
+
+    Equivalent to the `reble-mcp` console script; configure the host with
+    REBLE_PROJECT_DIR (project root containing reble.yml) and optional
+    REBLE_PROFILE. Requires the `mcp` extra: pip install 'reble[mcp]'.
+    """
+    from .mcp_server import main as mcp_main
+
+    mcp_main()
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()
