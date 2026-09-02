@@ -46,11 +46,11 @@ theme:
 
 nav:
   - Home: index.md
+  - Days you've had: scenarios.md
   - Getting started: getting-started.md
   - Concepts: concepts.md
   - Comparisons: comparisons.md
   - Command reference: cli.md
-  - Days you've had: scenarios.md
 
 not_in_nav: |
   requirements.txt

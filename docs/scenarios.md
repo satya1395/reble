@@ -1,7 +1,9 @@
 # Days you've had
 
-The situations Reble was built for. If none of these are familiar, you
-probably don't need it.
+The situations Reble was built for — told the way they actually happen,
+before any vocabulary. If one of these is your Tuesday, Reble is for you;
+[Getting started](getting-started.md) shows the loop, and
+[Concepts](concepts.md) supplies the words for what you just read.
 
 ## "The backfill"
 

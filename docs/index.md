@@ -43,8 +43,9 @@ reble promote                   # fast-forward main — or a scoped re-run with 
                                 # fresh diff if main moved. No merge. Ever.
 ```
 
-That's the whole product. [Getting started](getting-started.md) walks it end
-to end on a runnable example.
+That's the whole product. Start with a story you've lived —
+[Days you've had](scenarios.md) — or walk the loop end to end in
+[Getting started](getting-started.md).
 
 ## What makes it different
 
