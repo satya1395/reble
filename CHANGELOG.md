@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+- Rewritten README pitch: concrete what/why/loop for data engineers.
+- Docs site (mkdocs-material) at https://satya1395.github.io/reble/ —
+  getting started, concepts (incl. the git↔Reble mapping and the no-merge
+  argument), comparisons vs lakeFS / Nessie / warehouse clones / dbt,
+  command reference, and scenarios.
+
 ## 0.2.0
 
 Complete rewrite of the 0.0.x/0.1.x line. The model contract, semantics, and

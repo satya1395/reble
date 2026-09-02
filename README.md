@@ -4,18 +4,16 @@
 [![PyPI](https://img.shields.io/pypi/v/reble)](https://pypi.org/project/reble/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**The workspace where humans and AI agents change the lakehouse safely.**
-Every change runs on an isolated Iceberg branch and is accepted only after
-its consequences are visible.
+**Git-style branches for your Iceberg warehouse.** Change a model, run it
+on an isolated zero-copy branch, review the exact rows that changed, then
+fast-forward production. No warehouse clones, no copies, no merges.
 
-- **For humans:** the branch button for the lakehouse.
-- **For agents:** a transactional data-change API — scope, pin, run, diff,
-  promote or discard.
-
-The headline capability is **accept-with-consequences**: before you accept a
-change, Reble shows you the exact rows it adds, removes, and modifies. A code
-IDE can't do that; a lakehouse can, structurally — the branch already
-materialized the effect.
+You know this problem: to test a change to one model you either re-run your
+pipeline against a copy of the warehouse (slow, expensive, constantly out of
+date) or you cross your fingers on prod. Reble gives every change its own
+**branch of only the tables it touches** — your edited models plus their
+downstream closure — built on native Iceberg branch refs that cost nothing
+to create. Before anything reaches production, you see the row-level diff.
 
 ```mermaid
 flowchart LR
@@ -45,12 +43,14 @@ reble promote             # fast-forward if base is current; forced re-run with
                           #   fresh diff if main moved. No merge. Ever.
 ```
 
-Bots and agents are first-class users: every command speaks a stable
-[`--json` envelope](SPEC.md) with documented exit codes, and `run`/`diff`
-stream versioned [`--events`](SPEC.md#event-streams) (NDJSON) for progress.
-Change-sets don't need git: `reble run --change-set <id>` (or
-`REBLE_CHANGE_SET`) keys the work; `--branch` resumes an existing data
-branch under a new change-set.
+## What Reble is — and isn't
+
+- **Is:** a CLI that works with the Iceberg catalog you already run (Glue,
+  Polaris, Nessie, Hive, any REST catalog). No server, no new infrastructure.
+- **Isn't:** a catalog, an orchestrator, or a merge tool. There is no
+  three-way data merge, ever — a change is either fast-forwarded or re-run.
+- See [how Reble compares](https://satya1395.github.io/reble/comparisons/)
+  to lakeFS, Nessie, and warehouse clones.
 
 ## Models are plain SQL
 
@@ -108,8 +108,17 @@ Install with `pip install 'reble[mcp]'`. `reble_run` generates and returns a
 change-set id; errors carry the spec exit codes as structured `error.code`
 (3 = drift, 4 = promote-blocked). Tool docstrings are the agent-facing spec.
 
+Agents and CI are first-class everywhere, not just over MCP: every command
+speaks a stable [`--json` envelope](SPEC.md) with documented exit codes,
+`run`/`diff` stream versioned [`--events`](SPEC.md#event-streams) (NDJSON),
+and work is keyed by change-set (`--change-set <id>` or `REBLE_CHANGE_SET`)
+so it never depends on git — `--branch` resumes an existing data branch
+under a new change-set.
+
 ## Documentation
 
+- [**Docs site**](https://satya1395.github.io/reble/) — getting started,
+  concepts, comparisons, and the command reference.
 - [`SPEC.md`](SPEC.md) — normative CLI specification (v0.2): invariants,
   on-disk layout, `reble.yml` schema, command reference, JSON envelope,
   event streams, provenance, exit codes.
@@ -123,7 +132,7 @@ change-set id; errors carry the spec exit codes as structured `error.code`
 
 ## Status
 
-v0.1 — the full branch → run → diff → promote loop on DuckDB + pyiceberg,
+v0.2 — the full branch → run → diff → promote loop on DuckDB + pyiceberg,
 with change-set keying, event streams, catalog-side provenance, and the MCP
 tool surface for agents. Next: the DuckDB read path at scale
 (`iceberg_scan` + spill) and the Spark runner.
