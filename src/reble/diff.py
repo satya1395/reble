@@ -1,12 +1,18 @@
 """Row-level + schema diff (spec section 4, `reble diff`).
 
-Runs on the user's compute. Key columns come from config/dbt tests; fallback
-is full-hash compare with a warning (on_missing_key).
+Runs on the user's compute. Key columns come from config or the model's
+`key:` header; fallback is full-hash compare with a warning (on_missing_key).
+
+The comparison runs over two registered DuckDB views — `branch_tbl` and
+`base_tbl` — which may be lazy `iceberg_scan` views (streaming, out-of-core)
+or arrow materializations; `diff_arrow` is the arrow-registered convenience
+wrapper, `diff_snapshots` is view-agnostic.
 """
 
 from __future__ import annotations
 
 import datetime
+import decimal
 from dataclasses import dataclass, field
 
 import duckdb
@@ -14,7 +20,7 @@ import pyarrow as pa
 
 from .errors import MissingDiffKey
 
-_NULL = "'\\N'"
+_NULL = "\'\\N\'"
 
 
 @dataclass
@@ -61,7 +67,8 @@ def resolve_keys(
     inferred_keys: list[str],
     on_missing_key: str,
 ) -> list[str] | None:
-    """Explicit config keys win; else dbt-inferred; else hash fallback or error (exit 7)."""
+    """Explicit config keys win; else the model's `key:` header; else hash
+    fallback or error (exit 7)."""
     if table in explicit_keys:
         return explicit_keys[table]
     if inferred_keys:
@@ -78,15 +85,13 @@ def diff_arrow(
     keys: list[str] | None,
     max_rows_dumped: int = 1000,
 ) -> TableDiff:
-    """Diff two snapshots of a table via DuckDB.
-
-    keys given → anti/join on keys: added / removed / changed (same key,
-    different values). keys=None → full-row-hash compare + warning.
-    """
-    result = TableDiff(table=table_name, key_columns=keys)
+    """Diff two arrow tables (registers them as views, then compares)."""
     if keys is None:
+        result = TableDiff(table=table_name, key_columns=None)
         result.warning = f"{table_name}: no diff key, full-hash compare"
-    _schema_diff(base, branch, result)
+    else:
+        result = TableDiff(table=table_name, key_columns=keys)
+    _schema_diff_arrow(base, branch, result)
 
     con = duckdb.connect(":memory:")
     try:
@@ -98,9 +103,40 @@ def diff_arrow(
     return result
 
 
-def _schema_diff(base: pa.Table, branch: pa.Table, result: TableDiff) -> None:
+def diff_snapshots(
+    con: duckdb.DuckDBPyConnection,
+    table_name: str,
+    keys: list[str] | None,
+    max_rows_dumped: int = 1000,
+) -> TableDiff:
+    """Diff two pre-registered views (`branch_tbl`, `base_tbl`) on `con`.
+
+    Views may be lazy iceberg_scan views — nothing is materialized unless
+    DuckDB spills, and the anti/join work runs out-of-core.
+    """
+    if keys is None:
+        result = TableDiff(table=table_name, key_columns=None)
+        result.warning = f"{table_name}: no diff key, full-hash compare"
+    else:
+        result = TableDiff(table=table_name, key_columns=keys)
+    _schema_diff_views(con, result)
+    _row_diff(con, result, max_rows_dumped)
+    return result
+
+
+def _schema_diff_arrow(base: pa.Table, branch: pa.Table, result: TableDiff) -> None:
     base_cols = {f.name: str(f.type) for f in base.schema}
     branch_cols = {f.name: str(f.type) for f in branch.schema}
+    _apply_schema_delta(base_cols, branch_cols, result)
+
+
+def _schema_diff_views(con: duckdb.DuckDBPyConnection, result: TableDiff) -> None:
+    base_cols = dict(_describe(con, "base_tbl"))
+    branch_cols = dict(_describe(con, "branch_tbl"))
+    _apply_schema_delta(base_cols, branch_cols, result)
+
+
+def _apply_schema_delta(base_cols, branch_cols, result) -> None:
     result.schema_added = sorted(set(branch_cols) - set(base_cols))
     result.schema_removed = sorted(set(base_cols) - set(branch_cols))
     result.schema_changed = sorted(
@@ -109,8 +145,15 @@ def _schema_diff(base: pa.Table, branch: pa.Table, result: TableDiff) -> None:
     )
 
 
+def _describe(con: duckdb.DuckDBPyConnection, view: str) -> list[tuple[str, str]]:
+    return [
+        (row[0], row[1])
+        for row in con.execute(f'DESCRIBE SELECT * FROM "{view}"').fetchall()
+    ]
+
+
 def _columns(con: duckdb.DuckDBPyConnection, view: str) -> list[str]:
-    return [row[0] for row in con.execute(f"DESCRIBE {view}").fetchall()]
+    return [name for name, _ in _describe(con, view)]
 
 
 def _row_diff(con: duckdb.DuckDBPyConnection, result: TableDiff, max_rows: int) -> None:
@@ -140,8 +183,8 @@ def _row_diff(con: duckdb.DuckDBPyConnection, result: TableDiff, max_rows: int) 
             f"SELECT COUNT(*) FROM branch_tbl b JOIN base_tbl a ON ({on}) WHERE {differs}"
         ).fetchone()[0]
         result.unchanged_count = con.execute(
-            f"SELECT COUNT(*) FROM branch_tbl b JOIN base_tbl a ON ({on}) "
-            f"WHERE NOT ({differs})"
+            f"SELECT COUNT(*) FROM branch_tbl b JOIN base_tbl a "
+            f"ON ({on}) WHERE NOT ({differs})"
         ).fetchone()[0]
         added_rows = con.execute(
             f"SELECT {b_select} FROM branch_tbl b ANTI JOIN base_tbl a ON ({on}){limit}"
@@ -184,7 +227,7 @@ def _row_diff(con: duckdb.DuckDBPyConnection, result: TableDiff, max_rows: int) 
 
 def _row_hash(cols: list[str]) -> str:
     parts = " || ".join(
-        f"COALESCE(CAST(\"{c}\" AS VARCHAR), {_NULL})" for c in cols
+        f'COALESCE(CAST("{c}" AS VARCHAR), {_NULL})' for c in cols
     )
     return f"MD5({parts})"
 
@@ -197,8 +240,6 @@ def _to_dicts(cols: list[str], rows: list[tuple]) -> list[dict]:
 
 
 def _jsonable(value):
-    import decimal
-
     if isinstance(value, (bytes, bytearray)):
         return value.hex()
     if isinstance(value, (datetime.date, datetime.time)):

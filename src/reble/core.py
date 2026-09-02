@@ -25,7 +25,8 @@ from .catalog import (
     snapshot_id_of,
 )
 from .config import ConfigLoader
-from .diff import diff_arrow, resolve_keys
+from .diff import diff_arrow, diff_snapshots, resolve_keys
+from .duckio import DuckIo
 from .engine import DuckDbEngine, SparkEngine
 from .errors import DriftError, EmptyScope, RebleError
 from .events import EventCallback
@@ -341,7 +342,7 @@ class Reble:
             ok=all(r.status != "error" for r in manifest.results),
             data=data,
             branch=branch_env(git_branch, data_branch, changeset_id),
-            warnings=warnings,
+            warnings=warnings + getattr(runner, "io_warnings", []),
         )
         failed = [r for r in manifest.results if r.status == "error"]
         if failed:
@@ -379,6 +380,8 @@ class Reble:
 
         base_ref = st.base_ref if against == "base" else against
         max_rows = 0 if full else (rows if rows is not None else self.cfg.diff.max_rows_dumped)
+        io = DuckIo(self.cfg.engines.duckdb, self.reble_dir)
+        warnings: list[str] = []
 
         out = []
         for name in targets:
@@ -390,23 +393,33 @@ class Reble:
             base_snap = get_ref_snapshot(table, base_ref)
             if branch_snap is None:
                 raise RebleError(f"{table_id}: no branch ref '{data_branch}' to diff against")
-            branch_data = table.scan(snapshot_id=branch_snap).to_arrow()
-            base_data = (
-                table.scan(snapshot_id=base_snap).to_arrow()
-                if base_snap is not None
-                else _empty_like(branch_data)
-            )
 
-            model = graph.models.get(name)
-            inferred = model.diff_keys if model else []
-            keys = resolve_keys(name, self.cfg.diff.keys, inferred, self.cfg.diff.on_missing_key)
-            if schema_only:
-                d = diff_arrow(table_id, base_data, branch_data, keys=None, max_rows_dumped=0)
-                d.added_count = d.removed_count = d.changed_count = 0
-                d.added_samples = d.removed_samples = d.changed_samples = []
-                d.warning = None
-            else:
-                d = diff_arrow(table_id, base_data, branch_data, keys, max_rows_dumped=max_rows)
+            con = io.connect()
+            try:
+                io.register_snapshot(con, "branch_tbl", table, branch_snap, warnings)
+                if base_snap is not None:
+                    io.register_snapshot(con, "base_tbl", table, base_snap, warnings)
+                else:
+                    # new-model branch: main holds only the zero-row seed
+                    con.register(
+                        "base_tbl",
+                        _empty_like(table.scan(snapshot_id=branch_snap).to_arrow()),
+                    )
+
+                model = graph.models.get(name)
+                inferred = model.diff_keys if model else []
+                keys = resolve_keys(
+                    name, self.cfg.diff.keys, inferred, self.cfg.diff.on_missing_key
+                )
+                if schema_only:
+                    d = diff_snapshots(con, table_id, keys=None, max_rows_dumped=0)
+                    d.added_count = d.removed_count = d.changed_count = 0
+                    d.added_samples = d.removed_samples = d.changed_samples = []
+                    d.warning = None
+                else:
+                    d = diff_snapshots(con, table_id, keys, max_rows_dumped=max_rows)
+            finally:
+                con.close()
             out.append(d.to_dict())
             if on_event:
                 on_event(
@@ -422,6 +435,7 @@ class Reble:
             ok=True,
             data={"tables": out},
             branch=branch_env(git_branch, data_branch, changeset_id),
+            warnings=warnings,
         )
 
     def status(self, change_set: str | None = None, branch: str | None = None) -> dict:

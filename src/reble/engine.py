@@ -16,13 +16,13 @@ import re
 import time
 from dataclasses import dataclass
 
-import duckdb
 import pyarrow as pa
 from sqlglot import exp
 
+from .duckio import DuckIo
 from .errors import RebleError
 from .lineage import ModelNode, ast_hash, parse_model_sql
-from .relations import read_input, relation_id, table_for_model
+from .relations import relation_id, resolve_input_snapshot, table_for_model
 
 
 @dataclass
@@ -61,9 +61,11 @@ class SparkEngine:
 class DuckDbEngine:
     name = "duckdb (local)"
 
-    def __init__(self, cfg, catalog):
+    def __init__(self, cfg, catalog, reble_dir=None):
         self.cfg = cfg
         self.catalog = catalog
+        self.io = DuckIo(cfg.engines.duckdb, reble_dir)
+        self.warnings: list[str] = []  # per-run io warnings (fallbacks)
 
     def execute_model(
         self,
@@ -79,8 +81,9 @@ class DuckDbEngine:
         started = time.time()
         dialect = self.cfg.lineage.dialect
         tree = parse_model_sql(model.sql, dialect)  # unparseable → exit 6
+        self.warnings = []
 
-        con = duckdb.connect(":memory:")
+        con = self.io.connect()
         try:
             view_for = self._register_inputs(con, model, tree, graph, branch, base_ref, pin_tag, pin_inputs)
             rewritten = self._rewrite_refs(tree, view_for)
@@ -123,9 +126,9 @@ class DuckDbEngine:
             table = self._load_input(table_id, ref, model)
             tag = pin_tag(ref) if pin_inputs else None
             in_scope = rel_model is not None and ref != model.name
-            data = read_input(table, branch, base_ref, tag, in_scope)
+            snapshot_id = resolve_input_snapshot(table, branch, base_ref, tag, in_scope)
             view = f"reble_in_{len(view_for)}_{re.sub(r'[^A-Za-z0-9_]', '_', ref)}"
-            con.register(view, data)
+            self.io.register_snapshot(con, view, table, snapshot_id, self.warnings)
             view_for[ref] = view
         return view_for
 

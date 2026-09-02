@@ -134,6 +134,7 @@ class Runner:
         #    an unchanged model downstream of re-run inputs must re-run.
         scope_set = set(scope.scope)
         ran_this_run: set[str] = set()
+        io_warnings: list[str] = []
         for model_name in self._topological(scope.scope):
             model = self.graph.models[model_name]
             hash_unchanged = (
@@ -157,6 +158,7 @@ class Runner:
             )
             manifest.results.append(result)
             ran_this_run.add(model_name)
+            io_warnings.extend(getattr(self.engine, "warnings", []))
             emit(
                 "model.end",
                 model=model_name,
@@ -168,6 +170,7 @@ class Runner:
             )
 
         manifest.duration_ms = int((time.time() - manifest.started_at) * 1000)
+        self.io_warnings = io_warnings
         emit(
             "run.end",
             run_id=manifest.run_id,
