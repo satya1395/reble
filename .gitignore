@@ -19,3 +19,8 @@ demo/
 dist/
 # internal strategy doc — not published
 design notes
+# internal strategy doc — not published
+design notes.md
+# local tooling state
+.zcode/
+.DS_Store
