@@ -15,3 +15,4 @@ htmlcov/
 
 # Reble machine-local state (reble init also adds this to .gitignore)
 .reble/
+demo/
