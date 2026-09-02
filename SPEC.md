@@ -5,8 +5,7 @@ pick a behavior and write it down in [`DECISIONS.md`](DECISIONS.md).
 
 This document incorporates the standalone-direction supersessions (no dbt
 dependency, plain-SQL model contract, SQLGlot-only lineage) and the v0.2
-deltas from the vision design notes (§11): change-set keying, event streams, and
-provenance. Where the original chat-era spec was dbt- or git-framed, this
+deltas: change-set keying, event streams, and provenance. Where the original chat-era spec was dbt- or git-framed, this
 document is the authority.
 
 ## 1. Load-bearing invariants

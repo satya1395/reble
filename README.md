@@ -7,8 +7,6 @@ its consequences are visible.
 - **For humans:** the branch button for the lakehouse.
 - **For agents:** a transactional data-change API — scope, pin, run, diff,
   promote or discard.
-- **For the cloud (coming):** richer frontends on the same verbs
-  live data branch, and an accept button that shows you the rows.
 
 The headline capability is **accept-with-consequences**: before you accept a
 change, Reble shows you the exact rows it adds, removes, and modifies. A code
@@ -111,8 +109,7 @@ change-set id; errors carry the spec exit codes as structured `error.code`
 v0.1 — the full branch → run → diff → promote loop on DuckDB + pyiceberg,
 with change-set keying, event streams, catalog-side provenance, and the MCP
 tool surface for agents. Next: the DuckDB read path at scale
-(`iceberg_scan` + spill), the Spark runner, and the editor cloud (see the
-design notes roadmap).
+(`iceberg_scan` + spill) and the Spark runner.
 
 ## License
 

@@ -1,4 +1,4 @@
-"""Event stream schema (SPEC v0.2; design notes rule 5.6).
+"""Event stream schema (SPEC v0.2).
 
 Events are a library API first: the core (Runner, diff loop) calls an
 injected ``on_event(name, **payload)`` callback; the CLI ``--events`` flag is

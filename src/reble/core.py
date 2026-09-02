@@ -1,4 +1,4 @@
-"""Headless core: every verb as a library call (design notes rules 5.1/5.2).
+"""Headless core: every verb as a library call — one core, every frontend.
 
 The CLI and the MCP server are both thin adapters over this module. Each
 verb returns the full JSON envelope dict (spec §6) — identical output for
@@ -113,7 +113,7 @@ class Reble:
     def changeset(self, explicit: str | None = None) -> tuple[str, str]:
         """Change-set id and its source. Precedence: --change-set flag →
         REBLE_CHANGE_SET env → git branch (when git_sync). The change-set id
-        is the primary state key; git is one derivation adapter (design notes 5.3)."""
+        is the primary state key; git is one derivation adapter."""
         if explicit:
             return explicit, "explicit"
         env = os.environ.get("REBLE_CHANGE_SET")

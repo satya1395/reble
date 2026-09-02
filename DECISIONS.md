@@ -161,7 +161,7 @@ All orchestration lives in `reble/core.py` (`Reble` class); the CLI and the
 MCP server parse flags/params, call a verb, and render the returned
 envelope. Failures that still produce output raise `RebleError(payload=
 <envelope>)`. The acceptance bar for any core change is that the CLI test
-suite passes unchanged — the thin-client rule (design notes 5.1) made testable.
+suite passes unchanged — the thin-client rule made testable.
 
 ## 16. Agent change-set protocol
 

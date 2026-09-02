@@ -1,4 +1,4 @@
-"""Reble MCP server — the core verbs as agent tools (design notes rules 5.2, 5.5).
+"""Reble MCP server — the core verbs as agent tools — same core, no privileged path.
 
 The agent has no special powers: every tool is a thin wrapper over
 `core.Reble`, returning the same JSON envelopes the CLI emits. Spec exit
