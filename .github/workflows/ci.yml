@@ -21,6 +21,6 @@ jobs:
       - name: Install
         run: uv pip install --system -e ".[dev,mcp]"
       - name: Lint
-        run: ruff check reble/ tests/
+        run: ruff check src/reble/ tests/
       - name: Test
         run: pytest tests/ -q

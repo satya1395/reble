@@ -11,7 +11,7 @@ Thanks for helping. The short version:
   the CLI and MCP server render what verbs return. New capability goes in
   the core, never as frontend-private logic.
 - **Tests are the acceptance bar.** `pytest tests/ -q` and
-  `ruff check reble/ tests/` must pass. The CLI test suite doubling as the
+  `ruff check src/reble/ tests/` must pass. The CLI test suite doubling as the
   core's contract test is deliberate — don't weaken it to make a change pass.
 - **Keep envelopes additive.** `--json` output and event records change
   additively within a minor version only.
