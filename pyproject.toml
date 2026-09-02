@@ -1,6 +1,6 @@
 [project]
 name = "reble"
-version = "0.2.0"
+version = "0.2.1"
 description = "Git-style branching for Iceberg data warehouses: scoped branches, row-level diffs, fast-forward promotion."
 readme = "README.md"
 requires-python = ">=3.10"
