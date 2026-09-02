@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -19,13 +20,12 @@ def test_example_walkthrough(tmp_path, monkeypatch):
     work = tmp_path / "orders-lakehouse"
     shutil.copytree(EXAMPLE, work)
     monkeypatch.chdir(work)
-    venv_bin = Path(__file__).parent.parent / ".venv" / "bin"
 
     # Setup: init + seed
     result = runner.invoke(app, ["init", "--catalog", "sql", "--namespace", "analytics"])
     assert result.exit_code == 0, result.stdout
     seeded = subprocess.run(
-        [str(venv_bin / "python"), "seed.py"], capture_output=True, text=True, check=False
+        [sys.executable, "seed.py"], capture_output=True, text=True, check=False
     )
     assert seeded.returncode == 0, seeded.stderr
     assert "3 rows" in seeded.stdout
