@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 import time
 from pathlib import Path
 
@@ -87,21 +88,43 @@ class Context:
         root = repo_root(self.project_root)
         return current_branch(root) if root else None
 
-    def data_branch_for(self, git_branch: str | None, explicit: str | None = None) -> str:
+    def changeset(self, explicit: str | None = None) -> tuple[str | None, str]:
+        """Change-set id and its source. Precedence: --change-set flag →
+        REBLE_CHANGE_SET env → git branch (when git_sync). The change-set id
+        is the primary state key; git is one derivation adapter (design notes 5.3)."""
         if explicit:
-            return explicit
-        if git_branch is None:
+            return explicit, "explicit"
+        env = os.environ.get("REBLE_CHANGE_SET")
+        if env:
+            return env, "env"
+        git = self.git_branch
+        if git is not None:
+            return git, "git"
+        raise ConfigError(
+            "No change-set: pass --change-set NAME, set REBLE_CHANGE_SET, or "
+            "run inside a git branch with git_sync enabled"
+        )
+
+    def data_branch_for(
+        self,
+        changeset_id: str | None = None,
+        key_source: str = "git",
+        explicit_branch: str | None = None,
+    ) -> str:
+        """Data branch for a change-set. The recorded mapping in state wins;
+        disambiguation is only for a genuinely new change-set whose sanitized
+        name is taken (e.g. another engineer's branch)."""
+        if explicit_branch:
+            return explicit_branch
+        if changeset_id is None:
             raise ConfigError(
-                "No git branch available. Create an explicit data branch: "
+                "No change-set id available. Create an explicit data branch: "
                 "reble branch create <name>"
             )
-        # The recorded git↔data mapping wins: our own branch's existing refs
-        # are not a collision. Disambiguation is only for a genuinely new
-        # branch whose sanitized name is taken (e.g. another engineer's).
-        st = self.state.branches.get(git_branch)
+        st = self.state.branches.get(changeset_id)
         if st is not None:
             return st.data_branch
-        sanitized = sanitize_branch_name(git_branch, self.cfg.branching.name_sanitization)
+        sanitized = sanitize_branch_name(changeset_id, self.cfg.branching.name_sanitization)
         return disambiguate(sanitized, self._existing_refs())
 
     def _existing_refs(self) -> set[str]:
@@ -113,25 +136,52 @@ class Context:
                 continue
         return refs
 
-    def branch_state(self, git_branch: str | None, data_branch: str) -> BranchState:
-        key = git_branch or data_branch
-        st = self.state.branches.get(key)
+    def branch_state(self, changeset_id: str, data_branch: str) -> BranchState:
+        st = self.state.branches.get(changeset_id) or self._state_by_branch(data_branch)
         if st is None:
             raise ConfigError(
-                f"No data branch for '{key}'. Run `reble run` or `reble branch create` first."
+                f"No data branch for change-set '{changeset_id}'. Run `reble run` "
+                "or `reble branch create` first."
             )
         return st
+
+    def _state_by_branch(self, data_branch: str) -> BranchState | None:
+        for st in self.state.branches.values():
+            if st.data_branch == data_branch:
+                return st
+        return None
 
     def graph(self):
         return build_graph(
             self.project_root / self.cfg.lineage.models_path, self.cfg.lineage.dialect
         )
 
-    def edited_models(self, graph, st: BranchState | None) -> tuple[list[str], dict[str, str]]:
-        """Edited = git-diff vs base commit (git_sync) ∪ AST-changed vs stored hashes."""
+    def hash_baseline(self, st: BranchState | None, data_branch: str) -> dict[str, str]:
+        """AST-hash baseline for edited detection.
+
+        Primary: the change-set's stored hashes. Fallback: the data branch's
+        last run manifest — so a new change-set resuming an existing data
+        branch stays incremental (the agent case). Returns {} for a genuinely
+        fresh branch (bootstrap rule: declare --models or get empty scope).
+        """
+        if st is not None and st.model_hashes:
+            return dict(st.model_hashes)
+        if st is not None and st.last_run_id:
+            manifest_path = self.reble_dir / "runs" / f"{st.last_run_id}.json"
+            hashes = _manifest_hashes(manifest_path)
+            if hashes:
+                return hashes
+        prior = self._state_by_branch(data_branch)
+        if prior is not None and prior.last_run_id:
+            return _manifest_hashes(self.reble_dir / "runs" / f"{prior.last_run_id}.json")
+        return {}
+
+    def edited_models(self, graph, st: BranchState | None, data_branch: str) -> tuple[list[str], dict[str, str]]:
+        """Edited = git-diff vs base commit (git_sync) ∪ AST-changed vs hash baseline."""
         edited: set[str] = set()
         dialect = self.cfg.lineage.dialect
         hashes = {n: ast_hash(m.sql, dialect) for n, m in graph.models.items() if m.sql.strip()}
+        baseline = self.hash_baseline(st, data_branch)
 
         if self.cfg.branching.git_sync:
             root = repo_root(self.project_root)
@@ -142,11 +192,10 @@ class Context:
                     if old_sql is None or ast_hash(old_sql, dialect) != hashes[name]:
                         edited.add(name)
 
-        if st is not None:
-            for name, h in hashes.items():
-                if st.model_hashes.get(name) not in (None, h) :
-                    # ran before with a different SQL → edited since last run
-                    edited.add(name)
+        for name, h in hashes.items():
+            if baseline.get(name) not in (None, h):
+                # ran before with a different SQL → edited since last run
+                edited.add(name)
 
         return sorted(edited), hashes
 
@@ -203,6 +252,24 @@ def main(
     _FLAGS["json"] = json_output
     _FLAGS["quiet"] = _FLAGS["quiet"] or quiet
     _ = (no_color,)
+
+
+def _branch_env(git_branch: str | None, data_branch: str, changeset_id: str | None) -> dict:
+    """Envelope `branch` object — additive field: changeset (SPEC v0.2)."""
+    return {"git": git_branch, "data": data_branch, "changeset": changeset_id}
+
+
+def _manifest_hashes(manifest_path: Path) -> dict[str, str]:
+    """Per-model AST hashes from a run manifest (hash-baseline fallback)."""
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {
+        r["model"]: r["ast_hash"]
+        for r in manifest.get("results", [])
+        if r.get("ast_hash")
+    }
 
 
 def _emit(env: dict, as_json: bool) -> None:
@@ -323,6 +390,12 @@ def run(
     depth: int | None = typer.Option(None, "--depth", help="Cap downstream cascade"),
     dry_run: bool = typer.Option(False, "--dry-run"),
     engine_name: str | None = typer.Option(None, "--engine", help="duckdb|spark"),
+    change_set: str | None = typer.Option(
+        None, "--change-set", help="Change-set id (primary state key; overrides git derivation)"
+    ),
+    branch: str | None = typer.Option(
+        None, "--branch", help="Explicit data branch (resume an existing branch under this change-set)"
+    ),
     profile: str | None = typer.Option(None, "--profile"),
     json_output: bool = typer.Option(False, "--json"),
     quiet: bool = typer.Option(False, "--quiet"),
@@ -332,13 +405,13 @@ def run(
     ctx = Context(config_path, profile)
     if engine_name == "spark":
         ctx.engine = SparkEngine(ctx.cfg, ctx.catalog)
+    changeset_id, key_source = ctx.changeset(change_set)
     git_branch = ctx.git_branch
-    data_branch = ctx.data_branch_for(git_branch)
+    data_branch = ctx.data_branch_for(changeset_id, key_source, explicit_branch=branch)
     graph = ctx.graph()
 
-    key = git_branch or data_branch
-    st = ctx.state.branches.get(key)
-    edited, _ = ctx.edited_models(graph, st)
+    st = ctx.state.branches.get(changeset_id) or ctx._state_by_branch(data_branch)
+    edited, _ = ctx.edited_models(graph, st, data_branch)
     if models:
         edited = [m.strip() for m in models.split(",") if m.strip()]
 
@@ -353,11 +426,12 @@ def run(
             base_ref=ctx.cfg.warehouse.default_base,
             base_commit=head_commit(root) if root else None,
             created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            key_source=key_source,
         )
-        ctx.state.branches[key] = st
+        ctx.state.branches[changeset_id] = st
     st.scope = scope.scope
-    # Persist before execution: a crashed run must not lose the git↔data
-    # branch mapping or the branch epoch (invariant 5).
+    # Persist before execution: a crashed run must not lose the change-set↔
+    # data-branch mapping or the branch epoch (invariant 5).
     ctx.store.save(ctx.state)
 
     runner = Runner(ctx.cfg, ctx.catalog, graph, ctx.engine, ctx.reble_dir)
@@ -368,7 +442,7 @@ def run(
                 "run",
                 ok=True,
                 data={"status": "empty scope — branch registered (invariant 6)"},
-                branch={"git": git_branch, "data": data_branch},
+                branch=_branch_env(git_branch, data_branch, changeset_id),
             ),
             json_output,
         )
@@ -388,7 +462,7 @@ def run(
                 "run",
                 ok=True,
                 data={"dry_run": True, "preflight": _jsonable(preflight)},
-                branch={"git": git_branch, "data": data_branch},
+                branch=_branch_env(git_branch, data_branch, changeset_id),
                 warnings=warnings,
             ),
             json_output,
@@ -438,7 +512,7 @@ def run(
             "run",
             ok=all(r.status != "error" for r in manifest.results),
             data=manifest.to_dict(),
-            branch={"git": git_branch, "data": data_branch},
+            branch=_branch_env(git_branch, data_branch, changeset_id),
             warnings=warnings,
         ),
         json_output,
@@ -485,6 +559,8 @@ def diff_cmd(
     schema_only: bool = typer.Option(False, "--schema-only"),
     rows: int | None = typer.Option(None, "--rows"),
     full: bool = typer.Option(False, "--full", help="Ignore max_rows_dumped"),
+    change_set: str | None = typer.Option(None, "--change-set", help="Change-set id"),
+    branch: str | None = typer.Option(None, "--branch", help="Explicit data branch"),
     profile: str | None = typer.Option(None, "--profile"),
     json_output: bool = typer.Option(False, "--json"),
     quiet: bool = typer.Option(False, "--quiet"),
@@ -492,9 +568,10 @@ def diff_cmd(
 ):
     """Row-level + schema diff of scope tables (exit 7 if key required and missing)."""
     ctx = Context(config_path, profile)
+    changeset_id, _ = ctx.changeset(change_set)
     git_branch = ctx.git_branch
-    data_branch = ctx.data_branch_for(git_branch)
-    st = ctx.branch_state(git_branch, data_branch)
+    data_branch = ctx.data_branch_for(changeset_id, explicit_branch=branch)
+    st = ctx.branch_state(changeset_id, data_branch)
     graph = ctx.graph()
 
     targets = [t.strip() for t in tables.split(",")] if tables else st.scope
@@ -534,7 +611,8 @@ def diff_cmd(
 
     _emit(
         envelope.envelope(
-            "diff", ok=True, data={"tables": out}, branch={"git": git_branch, "data": data_branch}
+            "diff", ok=True, data={"tables": out},
+            branch=_branch_env(git_branch, data_branch, changeset_id)
         ),
         json_output,
     )
@@ -549,6 +627,8 @@ def _empty_like(table):
 @app.command()
 @_run_guard
 def status(
+    change_set: str | None = typer.Option(None, "--change-set", help="Change-set id"),
+    branch: str | None = typer.Option(None, "--branch", help="Explicit data branch"),
     profile: str | None = typer.Option(None, "--profile"),
     json_output: bool = typer.Option(False, "--json"),
     quiet: bool = typer.Option(False, "--quiet"),
@@ -556,10 +636,10 @@ def status(
 ):
     """The 'where was I?' answer. Read-only, CI-safe. Exit 3 on drift."""
     ctx = Context(config_path, profile)
+    changeset_id, _ = ctx.changeset(change_set)
     git_branch = ctx.git_branch
-    data_branch = ctx.data_branch_for(git_branch)
-    key = git_branch or data_branch
-    st = ctx.state.branches.get(key)
+    data_branch = ctx.data_branch_for(changeset_id, explicit_branch=branch)
+    st = ctx.state.branches.get(changeset_id) or ctx._state_by_branch(data_branch)
 
     code_section: dict = {}
     data_section: dict = {}
@@ -578,7 +658,7 @@ def status(
         data_section["last_run_id"] = st.last_run_id
         data_section["scope"] = st.scope
         graph = ctx.graph()
-        edited, hashes = ctx.edited_models(graph, st)
+        edited, hashes = ctx.edited_models(graph, st, data_branch)
         data_section["edited_since_branch_point"] = edited
         # Un-run = edited models whose current SQL does not match the last run
         data_section["un_run_changes"] = [
@@ -612,7 +692,7 @@ def status(
             "status",
             ok=not drift,
             data={"code": code_section, "data": data_section},
-            branch={"git": git_branch, "data": data_branch},
+            branch=_branch_env(git_branch, data_branch, changeset_id),
             warnings=warnings,
         ),
         json_output,
@@ -627,6 +707,8 @@ def promote_cmd(
     yes: bool = typer.Option(False, "--yes", "-y"),
     ff_only: bool = typer.Option(False, "--ff-only"),
     dry_run: bool = typer.Option(False, "--dry-run"),
+    change_set: str | None = typer.Option(None, "--change-set", help="Change-set id"),
+    branch: str | None = typer.Option(None, "--branch", help="Explicit data branch"),
     profile: str | None = typer.Option(None, "--profile"),
     json_output: bool = typer.Option(False, "--json"),
     quiet: bool = typer.Option(False, "--quiet"),
@@ -634,9 +716,10 @@ def promote_cmd(
 ):
     """Fast-forward promote — only when pinned bases still equal current main."""
     ctx = Context(config_path, profile)
+    changeset_id, _ = ctx.changeset(change_set)
     git_branch = ctx.git_branch
-    data_branch = ctx.data_branch_for(git_branch)
-    st = ctx.branch_state(git_branch, data_branch)
+    data_branch = ctx.data_branch_for(changeset_id, explicit_branch=branch)
+    st = ctx.branch_state(changeset_id, data_branch)
 
     promoter = Promoter(
         ctx.cfg, ctx.catalog, ctx.reble_dir, persist=lambda: ctx.store.save(ctx.state)
@@ -663,7 +746,7 @@ def promote_cmd(
                     "would": "fast-forward" if not drifted else "re-run + fresh diff + fast-forward",
                     "atomicity": "per-table fast-forwards (atomic on a reble catalog)",
                 },
-                branch={"git": git_branch, "data": data_branch},
+                branch=_branch_env(git_branch, data_branch, changeset_id),
             ),
             json_output,
         )
@@ -759,7 +842,7 @@ def promote_cmd(
                 "promote_diff": promote_diff,
                 "atomicity": "per-table fast-forwards (atomic on a reble catalog)",
             },
-            branch={"git": git_branch, "data": data_branch},
+            branch=_branch_env(git_branch, data_branch, changeset_id),
         ),
         json_output,
     )
@@ -771,6 +854,9 @@ def branch_create(
     name: str = typer.Argument(..., help="Explicit data branch name"),
     from_ref: str = typer.Option(
         None, "--from", help="Ref to fork from (default: warehouse default_base)"
+    ),
+    change_set: str | None = typer.Option(
+        None, "--change-set", help="Change-set id to register for this branch"
     ),
     profile: str | None = typer.Option(None, "--profile"),
     json_output: bool = typer.Option(False, "--json"),
@@ -790,12 +876,20 @@ def branch_create(
         except Exception as exc:  # noqa: BLE001 — tables without snapshots are skipped
             if _show_text(json_output, quiet):
                 typer.secho(f"skip {table_id}: {exc}", fg=typer.colors.YELLOW, err=True)
-    key = ctx.git_branch or final_name
-    ctx.state.branches[key] = BranchState(
+    if change_set:
+        changeset_id, key_source = change_set, "explicit"
+    else:
+        try:
+            changeset_id, key_source = ctx.changeset()
+        except ConfigError:
+            # git-less bootstrap: the branch itself is the change-set key
+            changeset_id, key_source = final_name, "explicit"
+    ctx.state.branches[changeset_id] = BranchState(
         git_branch=ctx.git_branch or "",
         data_branch=final_name,
         base_ref=base_ref,
         created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        key_source=key_source,
     )
     ctx.store.save(ctx.state)
     _emit(
@@ -803,7 +897,7 @@ def branch_create(
             "branch create",
             ok=True,
             data={"branch": final_name, "base_ref": base_ref, "tables": created},
-            branch={"git": ctx.git_branch, "data": final_name},
+            branch=_branch_env(ctx.git_branch, final_name, changeset_id),
         ),
         json_output,
     )
@@ -820,7 +914,8 @@ def branch_list(
     ctx = Context(config_path, profile)
     branches = [
         {
-            "key": k,
+            "changeset": k,
+            "key_source": b.key_source,
             "data_branch": b.data_branch,
             "base_ref": b.base_ref,
             "scope": b.scope,

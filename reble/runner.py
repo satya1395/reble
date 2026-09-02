@@ -117,10 +117,18 @@ class Runner:
                         self.catalog, table_id, tag_name(self.cfg, branch, table), snapshot
                     )
 
-        # 3. Execute in dependency order, skipping unchanged models.
+        # 3. Execute in dependency order. A model may skip only when BOTH its
+        #    SQL hash is unchanged AND no in-scope parent executed this run —
+        #    an unchanged model downstream of re-run inputs must re-run.
+        scope_set = set(scope.scope)
+        ran_this_run: set[str] = set()
         for model_name in self._topological(scope.scope):
             model = self.graph.models[model_name]
-            if previous_hashes.get(model_name) == ast_hash(model.sql, self.cfg.lineage.dialect):
+            hash_unchanged = (
+                previous_hashes.get(model_name) == ast_hash(model.sql, self.cfg.lineage.dialect)
+            )
+            parents_ran = bool(self.graph.parents_of(model_name) & scope_set & ran_this_run)
+            if hash_unchanged and not parents_ran:
                 manifest.results.append(RunResult(model=model_name, status="skipped", kind=model.kind))
                 continue
             result = self.engine.execute_model(
@@ -132,6 +140,7 @@ class Runner:
                 pin_inputs=self.cfg.branching.pin_inputs,
             )
             manifest.results.append(result)
+            ran_this_run.add(model_name)
 
         manifest.duration_ms = int((time.time() - manifest.started_at) * 1000)
         self._write_manifest(manifest)

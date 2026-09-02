@@ -30,6 +30,9 @@ class BranchState:
     epoch: float = field(default_factory=time.time)  # branch creation moment (invariant 5)
     created_at: str = ""
     user_suffix: str | None = None
+    # How the state key was derived: "git" (git_sync adapter), "explicit"
+    # (--change-set flag), "env" (REBLE_CHANGE_SET). Additive field.
+    key_source: str = "git"
     model_hashes: dict[str, str] = field(default_factory=dict)  # last-run AST hashes
     scope: list[str] = field(default_factory=list)
     pins: dict[str, Pin] = field(default_factory=dict)  # relation -> Pin
