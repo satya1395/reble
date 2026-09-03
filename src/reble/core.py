@@ -429,7 +429,10 @@ class Reble:
             raise EmptyScope("no scope to diff — run `reble run` first")
 
         base_ref = st.base_ref if against == "base" else against
-        max_rows = 0 if full else (rows if rows is not None else self.cfg.diff.max_rows_dumped)
+        # None = unlimited (--full); 0 = counts only; otherwise the cap
+        max_rows = (
+            None if full else (rows if rows is not None else self.cfg.diff.max_rows_dumped)
+        )
         io = DuckIo(self.cfg.engines.duckdb, self.reble_dir)
         warnings: list[str] = []
 

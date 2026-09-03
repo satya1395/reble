@@ -134,14 +134,10 @@ def _print_preflight(preflight: dict, quiet: bool) -> None:
         typer.echo(f"{key:<18} {count:>3}   {shown}")
 
 
-SAMPLES_SHOWN = 10  # text mode; --rows/--full control how many the core returns
-
-
 def _print_diff(tables: list[dict], quiet: bool) -> None:
-    """Text-mode diff: one line per table, capped samples. Counts are exact
-    over the whole table; the engine already caps returned samples at
-    diff.max_rows_dumped (default 1000) — this caps the terminal further.
-    More via --rows/--full or --json."""
+    """Text-mode diff: counts are exact over the whole table; samples appear
+    only when asked for (--rows N / --full) and are capped by the engine at
+    diff.max_rows_dumped (default 1000) — the truncation note says so."""
     any_change = False
     for t in tables:
         added, removed, changed = t["added"], t["removed"], t["changed"]
@@ -163,11 +159,13 @@ def _print_diff(tables: list[dict], quiet: bool) -> None:
         if not quiet:
             for kind, label in (("added", "+"), ("removed", "-"), ("changed", "~")):
                 samples = (t.get("samples") or {}).get(kind, [])
-                for row in samples[:SAMPLES_SHOWN]:
+                for row in samples:
                     typer.echo(f"  {label} {row}")
-                hidden = len(samples) - SAMPLES_SHOWN
-                if hidden > 0:
-                    typer.echo(f"  {label} … and {hidden} more samples (of {t[kind]}; --rows/--full/--json for more)")
+                if samples and len(samples) < t[kind]:
+                    typer.echo(
+                        f"  {label} … {len(samples)} of {t[kind]} shown "
+                        f"(--rows N / --full for more)"
+                    )
     if not any_change:
         typer.echo("no changes — branch matches base")
 
@@ -366,8 +364,10 @@ def diff_cmd(
         "base", "--against", help="base (branch point) | main (advisory promote preview)"
     ),
     schema_only: bool = typer.Option(False, "--schema-only"),
-    rows: int | None = typer.Option(None, "--rows"),
-    full: bool = typer.Option(False, "--full", help="Ignore max_rows_dumped"),
+    rows: int | None = typer.Option(
+        None, "--rows", help="Show N sample rows per category (text mode default: counts only)"
+    ),
+    full: bool = typer.Option(False, "--full", help="Show all changed rows, ignore max_rows_dumped"),
     change_set: str | None = typer.Option(None, "--change-set", help="Change-set id"),
     branch: str | None = typer.Option(None, "--branch", help="Explicit data branch"),
     events: bool = typer.Option(
@@ -383,6 +383,9 @@ def diff_cmd(
         _FLAGS["json"] = True
         _FLAGS["ndjson"] = True
     core = _core(config_path, profile)
+    if rows is None and not full and not _as_json(json_output) and not events:
+        # Text default: row-level stats only — don't even fetch samples.
+        rows = 0
     env = _invoke(
         core.diff,
         json_output,

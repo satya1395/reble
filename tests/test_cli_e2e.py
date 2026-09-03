@@ -278,3 +278,24 @@ def test_estimate_empty_scope(project, seeded_catalog):
     result = runner.invoke(app, ["--json", "estimate"])
     assert result.exit_code == 0, result.stdout
     assert json.loads(result.stdout)["data"]["status"] == "empty scope"
+
+
+def test_diff_text_default_is_counts_only(project, seeded_catalog):
+    """`reble diff` (no flags) prints row stats, no sample rows; `--rows`
+    opts into samples."""
+    from typer.testing import CliRunner
+
+    from reble.cli import app
+
+    _invoke("run")
+    result = CliRunner().invoke(app, ["diff", "mart_orders"])
+    lines = [ln for ln in result.output.splitlines() if ln.strip()]
+    assert any("analytics.mart_orders: +3" in ln for ln in lines)
+    assert not any(ln.lstrip().startswith(("+", "-", "~")) for ln in lines if "mart_orders" not in ln)
+
+    sampled = CliRunner().invoke(app, ["diff", "mart_orders", "--rows", "2"])
+    sample_lines = [
+        ln for ln in sampled.output.splitlines()
+        if ln.lstrip()[:2] in ("+ ", "- ", "~ ")
+    ]
+    assert 0 < len(sample_lines) <= 2 * 3  # ≤ N per category

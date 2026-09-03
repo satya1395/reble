@@ -156,8 +156,9 @@ def _columns(con: duckdb.DuckDBPyConnection, view: str) -> list[str]:
     return [name for name, _ in _describe(con, view)]
 
 
-def _row_diff(con: duckdb.DuckDBPyConnection, result: TableDiff, max_rows: int) -> None:
-    limit = f" LIMIT {int(max_rows)}" if max_rows and max_rows > 0 else ""
+def _row_diff(con: duckdb.DuckDBPyConnection, result: TableDiff, max_rows: int | None) -> None:
+    # None = unlimited (--full); 0 = counts only (text-mode default)
+    limit = "" if max_rows is None else f" LIMIT {int(max_rows)}"
     base_cols = _columns(con, "base_tbl")
     branch_cols = _columns(con, "branch_tbl")
     common = [c for c in branch_cols if c in base_cols]
