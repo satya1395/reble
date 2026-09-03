@@ -9,38 +9,26 @@
 **Reble is an open SQL engine for your Iceberg lakehouse.** Your models are
 plain SQL files; Reble derives their dependencies, builds the tables into
 your catalog and bucket, and refreshes exactly what moved — triggered by
-cron, CI, Airflow, or an agent. And the engine is branch-capable at the
-core: every change can run on an isolated zero-copy branch where you
-review the exact rows it changes, then fast-forward production. No
-warehouse server, no clones, no merges.
+cron, CI, Airflow, or an agent.
 
-Most teams assemble this from parts — a scheduler to run SQLs in order, a
-transformation tool to manage them, and, when a change needs testing, a
-copy of the warehouse. Reble is one open layer for the whole job, and the
-branching isn't bolted on: scope, pin, run, diff, promote are what the
-engine does. A branch contains only the change's blast radius — your
-edited models plus their downstream closure — as native Iceberg branch
-refs that cost nothing to create.
+Every data team ends up building the same expensive hack around that job:
+a copy of the warehouse for testing changes. You refresh it, you queue for
+it, you hope it still matches prod — and you pay for it twice. Iceberg
+already has the primitive that makes it unnecessary: a branch ref is
+metadata-only, so a "copy" of a 5M-row table costs **10 ms and zero
+bytes** on any compliant catalog. What was missing is the *workflow* —
+deciding what a change touches, making its inputs reproducible, showing
+what it will do to production rows before anyone accepts it.
+
+Reble is that workflow, and it isn't bolted on: scope, pin, run, diff,
+promote are what the engine does. When you change a model, it branches,
+re-runs only the blast radius — your edited models plus their downstream
+closure, derived from the SQL — shows you the exact rows that will change,
+and fast-forwards production when you accept. There is no merge step, on
+purpose: promote or discard, never three-way-merge data, because data
+merges are where correctness goes to die.
 
 ![The Reble loop: build, edit on a branch, diff the rows, promote](docs/assets/demo.gif)
-
-## Why
-
-Every data team ends up building the same expensive hack: a copy of the
-warehouse for testing changes. You refresh it, you queue for it, you hope
-it still matches prod — and you pay for it twice.
-
-Iceberg already has the primitive that makes it unnecessary. A branch ref
-is metadata-only: a "copy" of a 5M-row table costs **10 ms and zero
-bytes**, on any compliant catalog. What's missing is the *workflow* around
-it — deciding what a change touches, making its inputs reproducible,
-showing what it will do to production rows before anyone accepts it.
-
-Reble is that workflow. When you change a model, it branches, re-runs only
-the blast radius, shows you the exact rows that will change, and
-fast-forwards production when you accept. There is no merge step, on
-purpose: promote or discard, never three-way-merge data — because data
-merges are where correctness goes to die.
 
 ## How it works
 
