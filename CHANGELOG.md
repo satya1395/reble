@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0
+
+- **Spark engine is real.** `compute_policy.prefer: spark` (or
+  `reble run --engine spark`) executes the same contract as DuckDB —
+  scoped runs, tag-pinned inputs via `VERSION AS OF` snapshot reads,
+  provenance in the snapshot summary, branch writes, fast-forward
+  promotion. Embedded PySpark (`local[*]` by default), `reble[spark]`
+  extra. Spark and pyiceberg share one catalog backend (Glue, Hive,
+  REST, or sql-over-Postgres) so refs are visible to both. See
+  [Engines](https://satya1395.github.io/reble/engines/).
+- Diffs remain on DuckDB regardless of engine (read-only compute;
+  documented as an honest limit).
+
 ## 0.5.1
 
 - **Fix: `region` in reble.yml now works for Glue catalogs.** pyiceberg

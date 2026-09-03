@@ -38,7 +38,7 @@ flowchart TB
     WHO["who triggers — cron · CI · Airflow · AI agents (MCP)"]
     MODELS["your models — models/*.sql, plain SQL + a 3-line header"]
     REBLE["Reble — SQLGlot lineage · scope · pin · run · diff · promote"]
-    ENGINE["compute — DuckDB (today), Spark (behind the same interface)"]
+    ENGINE["compute — DuckDB (default) · Spark (same interface)"]
     CAT["your Iceberg catalog — Glue · Polaris · Nessie · Hive · REST · sql"]
     STORE[("your storage — S3 · GCS · local disk")]
     WHO -->|"invokes one verb"| REBLE
@@ -256,7 +256,7 @@ under a new change-set.
 | Release | Theme | Highlights | Status |
 | --- | --- | --- | --- |
 | 0.4 | Runs on AWS | Glue + S3 verified end-to-end, credential auto-config, self-cleaning AWS smoke | ✅ shipped |
-| 0.5 | Bigger warehouses | Spark runner (local first, then serverless); GCS + ADLS verification; partitioned tables; incremental execution (watermark / insert-overwrite) | next |
+| 0.5 | Bigger warehouses | Spark runner (local first, then serverless); GCS + ADLS verification; partitioned tables; incremental execution (watermark / insert-overwrite) | Spark runner ✅ (0.6.0); rest ongoing |
 | 0.6 | Backfills & teams | Date-range / partition-scoped backfills (branch + insert-overwrite); documented CI recipes (PR checks, promote gates); multi-writer etiquette; `reble doctor` | planned |
 | 0.7 | Interop | REST catalogs verified (Polaris, Nessie); Trino read adapter on demand; Iceberg views | planned |
 | 0.8 | Operations | Metrics/log hooks; `estimate` v2; Windows support | planned |

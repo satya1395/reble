@@ -51,6 +51,7 @@ nav:
   - AWS (Glue + S3): aws.md
   - Airflow: airflow.md
   - Concepts: concepts.md
+  - Engines: engines.md
   - Performance: performance.md
   - Comparisons: comparisons.md
   - What Reble replaces: replaces.md

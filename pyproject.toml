@@ -1,6 +1,6 @@
 [project]
 name = "reble"
-version = "0.5.1"
+version = "0.6.0"
 description = "Git-style branching for Iceberg data warehouses: scoped branches, row-level diffs, fast-forward promotion."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,6 +35,9 @@ postgres = [
 ]
 mcp = [
     "mcp>=2.1",
+]
+spark = [
+    "pyspark>=3.5,<3.6",
 ]
 dev = [
     "numpy>=1.26",
@@ -71,3 +74,6 @@ ignore = ["S110", "S112"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "spark: needs JVM + pyspark; enabled with REBLE_SPARK_TESTS=1",
+]

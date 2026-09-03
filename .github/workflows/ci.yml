@@ -51,3 +51,37 @@ jobs:
         run: uv run pytest tests/test_state.py -v --tb=short
         env:
           REBLE_PG_TEST_URI: postgresql://postgres:reble@127.0.0.1:5432/postgres
+
+  # Spark engine: needs a JVM, pyspark, and a Postgres catalog shared by
+  # pyiceberg and Spark's JdbcCatalog. Downloads Iceberg runtime jars on
+  # first run (ivy cache) — kept out of the fast matrix for that reason.
+  spark:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: reble
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: uv pip install -e ".[dev,spark,postgres]"
+      - name: Spark engine tests
+        run: uv run pytest tests/test_spark.py -v --tb=short
+        env:
+          REBLE_SPARK_TESTS: "1"
+          REBLE_SPARK_PG_URI: postgresql://postgres:reble@127.0.0.1:5432/postgres

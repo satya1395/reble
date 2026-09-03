@@ -284,3 +284,25 @@ The open-core boundary: local state makes branching *work* (OSS);
 shared state makes it *multiplayer* (also OSS — production viability is
 not paywalled). The SaaS layer adds hosted effortlessness, not gated
 functionality.
+
+## 25. Spark engine: embedded PySpark, DataFrame writes, diffs deferred
+
+`compute_policy.prefer: spark` now executes runs instead of erroring.
+Design: embedded PySpark (`local[*]` default, no cluster), Spark and
+pyiceberg pointed at the *same* catalog backend so branch/tag refs are
+shared. Reads via Spark version travel (`VERSION AS OF <snapshot_id>` —
+the pinned equivalent of `iceberg_scan(snapshot_from_id=…)`). Writes via
+DataFrameWriterV2 with `snapshot-property.*` options, because on Spark
+3.5 / Iceberg 1.6 that is the *only* path that carries provenance into
+the snapshot summary — SQL `SUMMARY` clauses arrive in Spark 4.1, and
+`spark.sql.iceberg.snapshot-property.*` session confs are not read
+(GitHub #12997). The zero-row seed + branch creation stay in pyiceberg,
+identical to the DuckDB path.
+
+Two findings worth keeping: the SparkCatalog *wrapper* form
+(`spark.sql.catalog.<name>` + `type=`) is what actually registers
+(direct `catalog-impl` did not, environment-dependently); and SQLite
+cannot back a shared catalog — Spark's JDBC pool holds a database-level
+lock that blocks pyiceberg commits — so sql catalogs with Spark require
+Postgres. Diffs stay on DuckDB for now (read-only compute, spills under
+memory_limit); revisit if a real workload hits the wall.
