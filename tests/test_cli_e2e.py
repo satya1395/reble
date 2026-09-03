@@ -291,10 +291,13 @@ def test_diff_text_stats_and_saved_files(project, seeded_catalog):
 
     _invoke("run")
     result = CliRunner().invoke(app, ["diff", "mart_orders"])
-    lines = [ln for ln in result.output.splitlines() if ln.strip()]
-    assert any("analytics.mart_orders: +3" in ln for ln in lines)
-    assert not any(ln.lstrip().startswith(("+ ", "- ", "~ ")) for ln in lines)
-    assert any(ln.startswith("detail: ") for ln in lines)
+    output = result.output
+    # live progress: one line per table with counts and duration
+    assert "diffing analytics.mart_orders …" in output
+    assert "+3 -0 ~0" in output
+    # no sample rows in the terminal; they live in the saved JSON
+    assert not any(ln.lstrip().startswith(("+ ", "- ", "~ ")) for ln in output.splitlines())
+    assert "detail: " in output
 
     diff_dir = project / ".reble" / "diffs" / "fix-orders"
     saved = json.loads((diff_dir / "analytics.mart_orders.json").read_text())

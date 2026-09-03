@@ -134,26 +134,35 @@ def _print_preflight(preflight: dict, quiet: bool) -> None:
         typer.echo(f"{key:<18} {count:>3}   {shown}")
 
 
+def _diff_progress(event: str, **kw) -> None:
+    """Live text progress during diff — a big first table otherwise looks
+    like a hang. Prints per table as it completes, with duration."""
+    if event == "diff.table.begin":
+        typer.echo(f"diffing {kw['table']} …", nl=False)
+    elif event == "diff.table.end":
+        typer.echo(
+            f"  +{kw['added']} -{kw['removed']} ~{kw['changed']}"
+            f" ({kw.get('duration_ms', 0) / 1000:.1f}s)"
+        )
+
+
 def _print_diff(tables: list[dict], quiet: bool, diff_dir: str | None = None) -> None:
-    """Text mode: row-level stats only. Sample rows live in the per-table
-    JSON files under diff_dir (written by the core for every mode) —
-    --rows/--full control how much detail is *saved*."""
+    """After live progress: schema notes, warnings, saved-detail pointer.
+    Per-table counts were already printed by _diff_progress; sample rows
+    live in the per-table JSON files under diff_dir."""
     any_change = False
     for t in tables:
-        added, removed, changed = t["added"], t["removed"], t["changed"]
         schema = t.get("schema_delta") or {}
         schema_bits = [
             f"+{len(schema[k])} {k}"
             for k in ("added", "removed", "changed")
             if schema.get(k)
         ]
-        schema_note = f"  schema: {', '.join(schema_bits)}" if schema_bits else ""
-        changed_note = "" if added or removed or changed else "  (no changes)"
-        any_change = any_change or bool(added or removed or changed or schema_bits)
-        typer.echo(
-            f"{t['table']}: +{added} -{removed} ~{changed} "
-            f"({t.get('unchanged', 0)} unchanged){changed_note}{schema_note}"
+        any_change = any_change or bool(
+            t["added"] or t["removed"] or t["changed"] or schema_bits
         )
+        if schema_bits:
+            typer.echo(f"{t['table']} schema: {', '.join(schema_bits)}")
         if t.get("warning"):
             typer.secho(f"  WARN {t['warning']}", fg=typer.colors.YELLOW, err=True)
     if diff_dir:
@@ -376,6 +385,9 @@ def diff_cmd(
         _FLAGS["json"] = True
         _FLAGS["ndjson"] = True
     core = _core(config_path, profile)
+    text_progress = (
+        None if (quiet or _as_json(json_output) or events) else _diff_progress
+    )
     env = _invoke(
         core.diff,
         json_output,
@@ -386,7 +398,7 @@ def diff_cmd(
         full=full,
         change_set=change_set,
         branch=branch,
-        on_event=ndjson_emitter("diff") if events else None,
+        on_event=ndjson_emitter("diff") if events else text_progress,
     )
     if _as_json(json_output):
         _emit(env, json_output)

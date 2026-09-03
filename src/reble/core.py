@@ -438,9 +438,10 @@ class Reble:
 
         out = []
         for name in targets:
-            if on_event:
-                on_event("diff.table.begin", table=name)
+            table_started = time.time()
             table_id = relation_id(self.cfg, name)
+            if on_event:
+                on_event("diff.table.begin", table=table_id)
             table = self.catalog.load_table(table_id)
             branch_snap = get_ref_snapshot(table, data_branch)
             base_snap = get_ref_snapshot(table, base_ref)
@@ -481,6 +482,7 @@ class Reble:
                     added=d.added_count,
                     removed=d.removed_count,
                     changed=d.changed_count,
+                    duration_ms=int((time.time() - table_started) * 1000),
                 )
 
         diff_dir = self._save_diff(changeset_id, against, out)
