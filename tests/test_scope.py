@@ -54,13 +54,6 @@ def test_pinned_inputs_include_out_of_scope_models_and_raw_refs():
     assert set(scope.pinned_inputs) == {"raw_events", "dim"}
 
 
-def test_incremental_models_listed_for_full_refresh():
-    graph = _graph({"inc": [], "plain": []})
-    graph.models["inc"].kind = "incremental"
-    scope = compute_scope(graph, ["inc", "plain"])
-    assert scope.incremental_full_refresh == ["inc"]
-
-
 def test_empty_edited_is_legal_empty_scope():
     scope = compute_scope(_graph({"a": []}), [])
     assert scope.is_empty

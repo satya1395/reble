@@ -122,13 +122,12 @@ cheap, meaningful checks in any CI system.
 
 ### Incremental, retries, and backfills — today's honest answers
 
-**Incremental models full-recompute today.** `kind: incremental` +
-`-- key:` currently means: rebuilt from scratch on every run, with the key
-driving diffs — not watermark-based appends. Watermark and
-partition-insert-overwrite strategies are on the
-[roadmap](https://github.com/satya1395/reble#roadmap-to-10). Until then the
-contract is deliberately simple: every run is a full rebuild of its scope,
-streaming and memory-bounded.
+**There is no `incremental` kind — deliberately.** Every run fully
+rebuilds its scope: replace, never append. A kind that said "incremental"
+while recomputing everything would be a lie in the contract, so the word
+isn't in it. Watermark and partition-insert-overwrite execution are on the
+[roadmap](https://github.com/satya1395/reble#roadmap-to-10) (0.5); the
+kind returns when it means something.
 
 **Retries are idempotent verbs.** Runs skip unchanged models (AST hashes)
 and re-execute only what a change touches; promotion records per-table

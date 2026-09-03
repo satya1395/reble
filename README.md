@@ -125,14 +125,15 @@ block carries the semantics:
 
 ```sql
 -- model: mart_orders      (optional; defaults to file name)
--- kind: table | view | incremental
--- key: order_id           (diff key; required for incremental)
+-- kind: table | view
+-- key: order_id           (diff key)
 select ... from stg_orders join raw_customers using (customer_id)
 ```
 
-Today `incremental` means full-recompute-with-a-diff-key (watermark and
-partition strategies are on the roadmap); reruns always *replace*, never
-append. `reble run --force` rebuilds unchanged SQL.
+Every run fully rebuilds its scope — replace, never append — and
+`reble run --force` rebuilds even unchanged SQL. (There is deliberately no
+`incremental` kind yet: it arrives when watermark / insert-overwrite
+execution is real, not as a word that recomputes everything.)
 
 Lineage is parsed with SQLGlot: a table reference that matches another model
 is an edge; anything else is an upstream input, pinned with an Iceberg tag at

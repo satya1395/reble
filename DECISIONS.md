@@ -254,3 +254,12 @@ smoke.py` runs the entire lifecycle on a disposable bucket + Glue database
 in-memory** — the streaming claim is asserted, not assumed. Measured on
 real S3 (1M rows, us-east-1, laptop): scoped run ~13s, refresh ~13s, keyed
 diff ~4s, drift ~2s, zero fallbacks.
+
+## 23. `kind: incremental` removed until it means it
+
+The kind existed in the header contract but every run fully rebuilt anyway
+(DECISIONS 3); a contract word that recomputes everything is a lie. Removed
+from accepted kinds (build fails on it with a pointer), spec invariant 6
+reworded to the replace-never-append truth, and the key header stands alone
+as the diff key. Incremental execution (watermark / insert-overwrite) is a
+0.5 roadmap item; the kind returns when it is real.

@@ -8,7 +8,7 @@ before any vocabulary. If one of these is your Tuesday, Reble is for you;
 ## "The backfill"
 
 Prod re-ingested last Tuesday. Legally you can't just re-run it — a fresh
-full run would clobber today's incremental data, and a partial patch is how
+full run would clobber today's appended data, and a partial patch is how
 marts end up quietly inconsistent. So you snapshot the affected tables to a
 staging project, wire credentials, re-run, compare by hand, and hope the
 snapshot was from the right moment.

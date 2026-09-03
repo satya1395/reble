@@ -11,15 +11,25 @@ from reble.lineage import ast_hash, build_graph, parse_header
 def test_header_parsing(tmp_path):
     (tmp_path / "models").mkdir()
     (tmp_path / "models" / "a.sql").write_text(
-        "-- model: custom_name\n-- kind: incremental\n-- key: id, org\n"
+        "-- model: custom_name\n-- kind: view\n-- key: id, org\n"
         "select 1 as id, 2 as org\n"
     )
     graph = build_graph(tmp_path / "models")
     node = graph.models["custom_name"]
-    assert node.kind == "incremental"
+    assert node.kind == "view"
     assert node.diff_keys == ["id", "org"]
     # file stem not used when -- model: is given
     assert "a" not in graph.models
+
+
+def test_incremental_kind_rejected_until_real(tmp_path):
+    """The contract refuses to say 'incremental' until it means it."""
+    (tmp_path / "models").mkdir()
+    (tmp_path / "models" / "a.sql").write_text(
+        "-- kind: incremental\nselect 1\n"
+    )
+    with pytest.raises(LineageError, match="incremental"):
+        build_graph(tmp_path / "models")
 
 
 def test_defaults_file_stem_and_table_kind(tmp_path):

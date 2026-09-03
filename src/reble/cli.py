@@ -314,11 +314,6 @@ def run(
                 if result["error"]:
                     line += f" — {result['error']}"
                 typer.echo(line)
-            for model in env["data"]["scope"]["incremental_full_refresh"]:
-                typer.secho(
-                    f"full-refresh: {model} (incremental models always full-refresh in branches)",
-                    fg=typer.colors.YELLOW,
-                )
     _emit(env, json_output)
 
 

@@ -41,7 +41,6 @@ class RunManifest:
                 "downstream": self.scope.downstream,
                 "stale_by_depth": self.scope.stale_by_depth,
                 "pinned_inputs": sorted(self.scope.pinned_inputs),
-                "incremental_full_refresh": self.scope.incremental_full_refresh,
             },
             "results": [r.__dict__ for r in self.results],
             "duration_ms": self.duration_ms,
@@ -64,10 +63,6 @@ class Runner:
             "pinned inputs": (
                 len(scope.pinned_inputs),
                 [tag_name(self.cfg, branch, t) for t in sorted(scope.pinned_inputs)],
-            ),
-            "full-refresh": (
-                len(scope.incremental_full_refresh),
-                scope.incremental_full_refresh,
             ),
             "engine": self.engine.name,
         }

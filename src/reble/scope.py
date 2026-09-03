@@ -17,7 +17,6 @@ class ScopePlan:
     downstream: list[str] = field(default_factory=list)
     stale_by_depth: list[str] = field(default_factory=list)  # cut off by --depth
     pinned_inputs: dict[str, str] = field(default_factory=dict)  # relation -> model/table name
-    incremental_full_refresh: list[str] = field(default_factory=list)
 
     @property
     def scope(self) -> list[str]:
@@ -82,15 +81,9 @@ def compute_scope(
             if table not in pinned:
                 pinned[table] = table
 
-    incremental = [
-        name for name in sorted(scope)
-        if name in graph.models and graph.models[name].is_incremental
-    ]
-
     return ScopePlan(
         edited=sorted(changed_set),
         downstream=sorted(closure),
         stale_by_depth=stale,
         pinned_inputs=pinned,
-        incremental_full_refresh=incremental,
     )

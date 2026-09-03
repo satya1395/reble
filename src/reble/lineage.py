@@ -5,12 +5,16 @@ one file = one model, file stem = model name. Semantics live in a minimal
 header comment block:
 
     -- model: mart_orders      (optional; defaults to file name)
-    -- kind: table | view | incremental
-    -- key: order_id           (diff key; required for incremental)
+    -- kind: table | view
+    -- key: order_id           (diff key)
 
 Lineage = SQLGlot over the registry. A parsed table reference matching a
 registry model name is an edge; anything else is an upstream input (pinned
 via Iceberg tags at run time). Unparseable SQL → exit 6.
+
+`kind: incremental` is deliberately absent: every run fully rebuilds its
+scope (replace, never append), so an "incremental" kind would be a lie.
+It returns when watermark / insert-overwrite execution is real.
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ from sqlglot import exp
 
 from .errors import LineageError
 
-_KINDS = ("table", "view", "incremental")
+_KINDS = ("table", "view")
 _HEADER_RE = re.compile(r"^\s*--\s*([A-Za-z_][\w-]*)\s*:\s*(.+?)\s*$")
 
 
@@ -85,14 +89,10 @@ class ModelNode:
     name: str
     sql: str
     path: str
-    kind: str = "table"  # table | view | incremental
+    kind: str = "table"  # table | view
     diff_keys: list[str] = field(default_factory=list)  # from `key:` header
     depends_on: list[str] = field(default_factory=list)  # model names
     upstream_tables: list[str] = field(default_factory=list)  # non-model refs
-
-    @property
-    def is_incremental(self) -> bool:
-        return self.kind == "incremental"
 
 
 class Graph:
@@ -169,13 +169,9 @@ def build_graph(models_path: Path, dialect: str = "duckdb") -> Graph:
         kind = (header.get("kind") or "table").lower()
         if kind not in _KINDS:
             raise LineageError(
-                f"{sql_file}: unknown kind '{kind}' (expected table|view|incremental)"
+                f"{sql_file}: unknown kind '{kind}' (expected table|view)"
             )
         keys = [k.strip() for k in re.split(r"[,;]", header.get("key", "")) if k.strip()]
-        if kind == "incremental" and not keys:
-            # key is required for incremental models (model contract); diff
-            # falls back to on_missing_key behavior, announced as a warning.
-            keys = []
         tree = parse_model_sql(sql, dialect)  # unparseable → LineageError (exit 6)
         node = ModelNode(
             name=name,

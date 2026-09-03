@@ -11,9 +11,11 @@
   (AWS_PROFILE / env / SSO) when `engines.duckdb.settings` is unset;
   manual settings take full responsibility. Values never logged.
 - `reble run --force`: rebuild the scope even when SQL hashes are
-  unchanged (reruns replace, never append). Docs now state plainly that
-  `incremental` means full-recompute today; watermark and partition
-  strategies, and date-range backfills, are roadmap items.
+  unchanged (reruns replace, never append).
+- **`kind: incremental` removed from the model contract.** Every run
+  fully rebuilds its scope, so the word was a lie; builds now reject it.
+  It returns when watermark / insert-overwrite execution is real (roadmap
+  0.5), alongside date-range backfills (0.6).
 
 ## 0.3.2
 

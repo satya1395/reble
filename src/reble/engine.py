@@ -1,9 +1,7 @@
 """Local execution engines (spec: engines; DECISIONS.md).
 
 v0 primary: pyiceberg + DuckDB, ours end to end. Every model executes as
-CTAS-then-overwrite on the branch ref: `table` and `view` kinds materialize
-the full result; `incremental` always full-refreshes inside branches (spec
-rule). Spark stays a config-declared runner behind this interface, stubbed.
+CTAS-then-overwrite on the branch ref (full rebuild, replace-never-append). Spark stays a config-declared runner behind this interface, stubbed.
 
 Input resolution is AST-based: every table reference in the model SQL is
 rewritten to a DuckDB view over the appropriate snapshot — branch ref for

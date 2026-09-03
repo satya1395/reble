@@ -27,8 +27,10 @@ must justify itself in the description.
    raw snapshot IDs.
 5. Branch-first with an empty scope is legal. Scope grows at first run; reads
    resolve as of the branch epoch (creation moment).
-6. Incremental models always full-refresh inside branches. Announced in
-   output, never silent.
+6. Every run fully rebuilds the models in its scope — replace, never
+   append — and reruns are idempotent. (`kind: incremental` is deliberately
+   absent from the contract; it returns only when incremental execution is
+   real.)
 7. Fast-forward promote is legal only when every scope table's pinned base
    still equals current main. Otherwise promote forces a scoped re-run and
    emits a fresh, promote-time diff. PR diffs are advisory; promote diffs are
@@ -120,8 +122,8 @@ a minimal header comment block:
 
 ```sql
 -- model: mart_orders      (optional; defaults to file name)
--- kind: table | view | incremental
--- key: order_id           (diff key; required for incremental)
+-- kind: table | view
+-- key: order_id           (diff key)
 select ...
 ```
 
