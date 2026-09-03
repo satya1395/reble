@@ -48,6 +48,6 @@ jobs:
       - name: Install
         run: uv pip install -e ".[dev,mcp,postgres]"
       - name: Postgres integration tests
-        run: uv run pytest tests/test_state.py -q -k Postgres
+        run: uv run pytest tests/test_state.py -v --tb=short
         env:
-          REBLE_PG_TEST_URI: postgresql://postgres:reble@localhost:5432/postgres
+          REBLE_PG_TEST_URI: postgresql://postgres:reble@127.0.0.1:5432/postgres
