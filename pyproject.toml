@@ -30,6 +30,9 @@ dependencies = [
 aws = [
     "pyiceberg[glue]>=0.8",
 ]
+postgres = [
+    "psycopg2-binary>=2.9",
+]
 mcp = [
     "mcp>=2.1",
 ]
