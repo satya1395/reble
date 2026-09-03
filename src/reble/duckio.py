@@ -44,16 +44,16 @@ class DuckIo:
     def _probe_iceberg(self) -> bool:
         try:
             con = duckdb.connect(":memory:")
-            con.execute("LOAD iceberg;")
+            ok = _load_extension(con, "iceberg")
             con.close()
-            return True
+            return ok
         except Exception:  # noqa: BLE001 — extension missing/offline → arrow
             return False
 
     def connect(self) -> duckdb.DuckDBPyConnection:
         con = duckdb.connect(":memory:")
         if self.iceberg_ok:
-            con.execute("LOAD iceberg;")
+            _load_extension(con, "iceberg")
             # Acceptable only because callers pin snapshot ids resolved from
             # the committed catalog state (see module docstring).
             con.execute("SET unsafe_enable_version_guessing=true;")
@@ -82,13 +82,13 @@ class DuckIo:
         if resolved is None:
             # last resort: duckdb's own credential chain
             try:
-                con.execute("LOAD aws;")
-                con.execute("CALL load_aws_credentials();")
+                if _load_extension(con, "aws"):
+                    con.execute("CALL load_aws_credentials();")
             except Exception:  # noqa: BLE001 — local-only setups don't need s3
                 pass
             return
         region, creds = resolved
-        con.execute("LOAD httpfs;")
+        _load_extension(con, "httpfs")
         if region:
             con.execute(f"SET s3_region='{region}';")
         con.execute(f"SET s3_access_key_id='{creds.access_key}';")
@@ -152,6 +152,25 @@ def _scan_location(table) -> str | None:
 
 
 _S3_CRED_CACHE: list = []  # [(region, creds)] — resolved once per process
+
+
+def _load_extension(con: duckdb.DuckDBPyConnection, name: str) -> bool:
+    """LOAD with INSTALL fallback.
+
+    On a cold machine (no ~/.duckdb cache — CI runners, fresh containers)
+    LOAD alone raises "install it first"; INSTALL is a no-op when already
+    present and downloads otherwise.
+    """
+    try:
+        con.execute(f"LOAD {name};")
+        return True
+    except Exception:  # noqa: BLE001 — cold cache
+        try:
+            con.execute(f"INSTALL {name};")
+            con.execute(f"LOAD {name};")
+            return True
+        except Exception:  # noqa: BLE001 — offline without cache → arrow mode
+            return False
 
 
 def _boto3_s3_credentials():
