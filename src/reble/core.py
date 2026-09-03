@@ -293,6 +293,10 @@ class Reble:
             # data-driven scope: models whose upstream snapshots moved,
             # closed downward exactly like an edit-driven scope
             edited = data_stale_models(self.cfg, self.catalog, graph)
+        elif force:
+            # --force means full rebuild: every model is in scope, even with
+            # nothing edited (engine switch, rebuilding on a fresh branch).
+            edited = [name for name, m in graph.models.items() if m.sql.strip()]
 
         scope = compute_scope(graph, edited, depth=depth)
 

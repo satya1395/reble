@@ -159,3 +159,16 @@ def test_crashed_run_resumes_without_rerunning_completed(project, seeded_catalog
         "mart_orders": "ran",
         "report_daily": "ran",
     }
+
+
+def test_force_alone_rebuilds_everything(project, seeded_catalog):
+    """`reble run --force` with no edits and no --models is a full rebuild —
+    not "empty scope". The engine-switch case: nothing changed, everything
+    must run through the new engine anyway."""
+    runner.invoke(app, ["run"])  # first run: stg_orders + mart_orders
+
+    forced = json.loads(runner.invoke(app, ["--json", "run", "--force"]).stdout)
+    assert forced["ok"] is True
+    statuses = {r["model"]: r["status"] for r in forced["data"]["results"]}
+    assert set(statuses) == {"stg_orders", "mart_orders", "report_daily"}
+    assert set(statuses.values()) == {"ran"}
