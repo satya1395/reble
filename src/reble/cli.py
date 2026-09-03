@@ -134,9 +134,14 @@ def _print_preflight(preflight: dict, quiet: bool) -> None:
         typer.echo(f"{key:<18} {count:>3}   {shown}")
 
 
+SAMPLES_SHOWN = 10  # text mode; --rows/--full control how many the core returns
+
+
 def _print_diff(tables: list[dict], quiet: bool) -> None:
-    """Text-mode diff: one line per table, samples on request (--rows / --full
-    control samples in the core; this only renders them)."""
+    """Text-mode diff: one line per table, capped samples. Counts are exact
+    over the whole table; the engine already caps returned samples at
+    diff.max_rows_dumped (default 1000) — this caps the terminal further.
+    More via --rows/--full or --json."""
     any_change = False
     for t in tables:
         added, removed, changed = t["added"], t["removed"], t["changed"]
@@ -157,8 +162,12 @@ def _print_diff(tables: list[dict], quiet: bool) -> None:
             typer.secho(f"  WARN {t['warning']}", fg=typer.colors.YELLOW, err=True)
         if not quiet:
             for kind, label in (("added", "+"), ("removed", "-"), ("changed", "~")):
-                for row in (t.get("samples") or {}).get(kind, []):
+                samples = (t.get("samples") or {}).get(kind, [])
+                for row in samples[:SAMPLES_SHOWN]:
                     typer.echo(f"  {label} {row}")
+                hidden = len(samples) - SAMPLES_SHOWN
+                if hidden > 0:
+                    typer.echo(f"  {label} … and {hidden} more samples (of {t[kind]}; --rows/--full/--json for more)")
     if not any_change:
         typer.echo("no changes — branch matches base")
 
