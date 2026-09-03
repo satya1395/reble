@@ -29,6 +29,9 @@ def load_catalog(cfg: CatalogConfig, name: str | None = None) -> Catalog:
     catalog_name = name or props.pop("name", None) or "reble"
     if cfg.type in ("glue", "hive", "in-memory", "sql", "dynamodb", "bigquery"):
         props["type"] = cfg.type
+        if cfg.type == "glue" and "region" in props:
+            # pyiceberg reads glue.region; translate the user-friendly key
+            props["glue.region"] = props.pop("region")
     else:
         # polaris, nessie, rest, reble all speak the Iceberg REST spec
         props["type"] = "rest"
