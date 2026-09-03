@@ -45,9 +45,11 @@ reble promote             # fast-forward if base is current; forced re-run with
 
 ## What Reble is — and isn't
 
-- **Is:** a CLI that works with the Iceberg catalog you already run (Glue,
-  Polaris, Nessie, Hive, any REST catalog). No server, no new infrastructure.
-- **Isn't:** a catalog, an orchestrator, or a merge tool. There is no
+- **Is:** a transformation engine (models + lineage + execution) that works
+  with the Iceberg catalog you already run (Glue, Polaris, Nessie, Hive,
+  any REST catalog). No server, no new infrastructure.
+- **Isn't:** a scheduler (cron/Airflow's job — Reble is the step they run),
+  a catalog, or a merge tool. There is no
   three-way data merge, ever — a change is either fast-forwarded or re-run.
 - See [how Reble compares](https://satya1395.github.io/reble/comparisons/)
   to lakeFS, Nessie, and warehouse clones.
@@ -101,7 +103,25 @@ provenance (`reble.model`, `reble.ast_hash`, `reble.run_id`) in its summary —
 
 ## How it works
 
-Reble is built on **native Iceberg branch refs** — a per-table Iceberg spec
+```mermaid
+flowchart TB
+    WHO["who triggers — cron · CI · Airflow · AI agents (MCP)"]
+    MODELS["your models — models/*.sql, plain SQL + a 3-line header"]
+    REBLE["Reble — SQLGlot lineage · scope · pin · run · diff · promote"]
+    ENGINE["compute — DuckDB (today), Spark (behind the same interface)"]
+    CAT["your Iceberg catalog — Glue · Polaris · Nessie · Hive · REST · sql"]
+    STORE[("your storage — S3 · GCS · local disk")]
+    WHO -->|"invokes one verb"| REBLE
+    MODELS --> REBLE
+    REBLE --> ENGINE
+    ENGINE -->|"branch refs · tag pins · snapshots"| CAT
+    CAT --> STORE
+```
+
+Reble owns the *transformation* layer — models, lineage, execution,
+branching — the shape dbt-core has, without the templating or YAML. It
+does **not** own *scheduling*: cron or Airflow decides when; Reble is the
+step they run. And it's built on **native Iceberg branch refs** — a per-table Iceberg spec
 feature supported by any catalog (Glue, Polaris, Nessie, Hive, or any
 REST-compliant catalog). It is *not* a catalog and requires no new
 infrastructure. A branch ref is metadata-only: zero bytes are copied.

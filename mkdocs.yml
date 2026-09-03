@@ -48,6 +48,7 @@ nav:
   - Home: index.md
   - Days you've had: scenarios.md
   - Getting started: getting-started.md
+  - Airflow: airflow.md
   - Concepts: concepts.md
   - Comparisons: comparisons.md
   - Command reference: cli.md

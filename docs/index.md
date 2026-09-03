@@ -47,6 +47,26 @@ That's the whole product. Start with a story you've lived —
 [Days you've had](scenarios.md) — or walk the loop end to end in
 [Getting started](getting-started.md).
 
+## Where it sits
+
+```mermaid
+flowchart TB
+    WHO["who triggers — cron · CI · Airflow · AI agents (MCP)"]
+    MODELS["your models — models/*.sql, plain SQL + a 3-line header"]
+    REBLE["Reble — SQLGlot lineage · scope · pin · run · diff · promote"]
+    ENGINE["compute — DuckDB (today), Spark (behind the same interface)"]
+    CAT["your Iceberg catalog — Glue · Polaris · Nessie · Hive · REST · sql"]
+    STORE[("your storage — S3 · GCS · local disk")]
+    WHO -->|"invokes one verb"| REBLE
+    MODELS --> REBLE
+    REBLE --> ENGINE
+    ENGINE -->|"branch refs · tag pins · snapshots"| CAT
+    CAT --> STORE
+```
+
+Reble owns the transformation layer (the shape dbt-core has); your
+scheduler owns *when*; your catalog and bucket stay yours.
+
 ## What makes it different
 
 A branch is **metadata only**. The tables you're changing get zero-copy

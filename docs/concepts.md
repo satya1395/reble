@@ -96,7 +96,8 @@ The first-ever build declares itself (`--models all` or a list), because a
 fresh project has no run history to infer from.
 
 **Scheduling is deliberately yours.** Cron, GitHub Actions, Airflow — they
-all just invoke one idempotent verb. The *run* is the unit; *when* is not
+all just invoke one idempotent verb ([Airflow guide](airflow.md) for DAG
+patterns). The *run* is the unit; *when* is not
 Reble's layer. That means two patterns, and neither involves a human:
 
 - *Scheduled*: a nightly line in crontab is a complete orchestration setup.
