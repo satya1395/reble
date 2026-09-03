@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.1
+
+- **Promote diffs stream instead of materializing.** The drift-path
+  promote-time diff now runs through the same lazy `iceberg_scan` views
+  as `reble diff`: peak memory is bounded by `engines.duckdb.memory_limit`
+  instead of twice the table size — measured 1.75 GB → 0.80 GB promoting
+  a 20M-row table.
+- Metadata commands (`branch list`, `status`) no longer open DuckDB or
+  probe the iceberg extension — on cold machines that probe was a network
+  download, paid by commands that never execute a model.
+- `reble diff` on a new model no longer reads the whole branch just to
+  derive an empty base schema.
+
 ## 0.6.0
 
 - **Spark engine is real.** `compute_policy.prefer: spark` (or
@@ -12,6 +25,9 @@
   [Engines](https://satya1395.github.io/reble/engines/).
 - Diffs remain on DuckDB regardless of engine (read-only compute;
   documented as an honest limit).
+- `reble run --force` with no edits and no `--models` is a full rebuild
+  (previously: no-op "empty scope"). Version string single-sourced —
+  `reble --version` now always matches the package version.
 
 ## 0.5.1
 
