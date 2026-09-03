@@ -43,11 +43,22 @@ import demoGif from "./assets/demo.gif";
 
 ## The problem
 
-To test a change to *one* model, data teams either re-run the pipeline
-against a copy of the warehouse — slow, expensive, and stale the moment prod
-ingests — or they cross their fingers on production. Neither gives you an
-answer to the only question that matters before shipping: **what rows would
-this change?**
+Data teams can't safely try things. Four gaps compound:
+
+1. **Environments are all-or-nothing.** A staging warehouse is a copy of
+   *everything*, so it's expensive enough that you share it — and then you
+   queue behind everyone else's experiments.
+2. **Test inputs drift.** By the time your change finishes running against
+   staging, prod has ingested three more hours of data. Your diff is against
+   a world that no longer exists.
+3. **"What rows does this change?" has no answer.** Code review sees the
+   SQL; nobody sees the 300 rows the new filter silently drops.
+4. **The modern stack almost had this.** Iceberg made branching *possible*
+   (native branch refs, on any compliant catalog) — but nothing made it
+   *usable*. You shouldn't need to run a new catalog server to get a branch.
+
+Reble is the workflow layer on top of that last point: scoped branches,
+deterministic inputs, row-level diffs, and a promote you can trust.
 
 ## The loop
 
@@ -68,27 +79,9 @@ reble promote                   # fast-forward main — or a scoped re-run with 
 That's the whole product. Start with a story you've lived —
 [Days you've had](scenarios.md) — see exactly
 [what Reble replaces](replaces.md) in your stack, or walk the loop end to
-end in [Getting started](getting-started.md).
-
-## Just SQL — no dbt required
-
-A **model** is just Reble's word for *one SQL file that produces one
-table*. Most teams already have these — a folder of query files and some
-way of running them in order. If that's you:
-
-- **Your SQL files are models as-is.** One file = one table; a three-line
-  comment header (`-- key: order_id`) is the only metadata, and even that
-  is optional.
-- **The dependencies you configure by hand** — in a DAG file, a UI, or a
-  config — **are parsed from the SQL itself.** A table reference to
-  another model is an edge; ordering and blast radius come from lineage,
-  not from clicking.
-- **Your scheduler stays your scheduler.** Airflow, cron, or the internal
-  webapp keeps deciding *when*; Reble takes over *what and how*: scoped
-  builds, isolated branches, row-level diffs, safe promotion.
-
-dbt users are welcome (your SQL ports almost unchanged), but nothing
-assumes dbt.
+end in [Getting started](getting-started.md). The concepts build up one at
+a time: [models](models.md) → [scope](scope.md) → [pins](pins.md) →
+[promote](promote.md).
 
 ## Where it sits
 
@@ -122,7 +115,7 @@ There is deliberately **no merge**. Promote is a fast-forward when your
 pinned inputs still match production, and a scoped re-run when they don't.
 Data merges with conflict resolution silently corrupt warehouses; Reble
 refuses to build one. The full argument is in
-[Concepts](concepts.md#where-the-analogy-breaks-merge).
+[where the git analogy breaks](git.md#where-the-analogy-breaks-merge).
 
 And it runs against **the catalog you already have** — Glue, Polaris,
 Nessie, Hive, or any REST-compliant Iceberg catalog. Reble is not a catalog,

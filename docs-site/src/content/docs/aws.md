@@ -97,7 +97,7 @@ warehouse:
   namespace: analytics_test
   default_base: main
 branching:
-  git_sync: false
+  git_sync: false            # standalone: this project has no git repo
 lineage:
   models_path: models
 ```

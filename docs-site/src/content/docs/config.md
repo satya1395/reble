@@ -87,7 +87,7 @@ profiles:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `git_sync` | `true` | Derive the change-set id from the current git branch. `false` makes Reble fully git-ignorant — agents pass `--change-set`. |
+| `git_sync` | `true` | Derive the change-set id from the current git branch. Set `false` for standalone projects with no git repo — change-sets then come from `--change-set` / `REBLE_CHANGE_SET`. See [Git, optional](git.md). |
 | `pin_inputs` | `true` | Tag-pin upstream inputs at run time so reruns are reproducible. [Why](iceberg-refs.md#pins). |
 | `tag_prefix` | `reble_pin__` | Namespace for pin tags, so they are recognizable in the catalog. |
 | `ttl_days` | `14` | Branch age at which `reble gc` expires it. |

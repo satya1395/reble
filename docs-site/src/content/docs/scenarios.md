@@ -5,7 +5,7 @@ description: "The incidents Reble is built around."
 The situations Reble was built for — told the way they actually happen,
 before any vocabulary. If one of these is your Tuesday, Reble is for you;
 [Getting started](getting-started.md) shows the loop, and
-[Concepts](concepts.md) supplies the words for what you just read.
+The [core concepts](models.md) supply the words for what you just read.
 
 ## "The backfill"
 

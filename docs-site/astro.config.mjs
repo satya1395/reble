@@ -27,7 +27,18 @@ export default defineConfig({
           items: [
             { label: "Introduction", link: "/" },
             { label: "Quickstart", slug: "getting-started" },
-            { label: "Core concepts", slug: "concepts" },
+          ],
+        },
+        {
+          label: "Core concepts",
+          items: [
+            { label: "Models", slug: "models" },
+            { label: "Scope", slug: "scope" },
+            { label: "Refreshes", slug: "refreshes" },
+            { label: "Incremental & retries", slug: "incremental" },
+            { label: "Pins", slug: "pins" },
+            { label: "Promote or discard", slug: "promote" },
+            { label: "Git, optional", slug: "git" },
           ],
         },
         {

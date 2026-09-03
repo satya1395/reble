@@ -83,9 +83,10 @@ reble status     # clean — nothing drifted
 reble promote    # fast-forward main; verify: the rows are there
 ```
 
-Outside git, or with `git_sync: false`, the same loop works keyed by a
-change-set: `reble run --change-set agent-42 --models ...`, then pass
-`--change-set agent-42` to diff/status/promote.
+No git repo? Same verbs, keyed by an explicit change-set:
+`reble run --change-set agent-42 --models ...`, then pass
+`--change-set agent-42` to diff/status/promote. See
+[Git, optional](git.md#standalone-mode-no-git-same-verbs).
 
 ## Watch the guardrails
 
@@ -116,7 +117,7 @@ every pinned input still equals production. Exit codes are a contract —
 
 ## Where to go next
 
-- [Concepts](concepts.md) — the branching model, pinning, and why there is
+- [Core concepts](models.md) — models, scope, pinning, and why there is
   no merge.
 - [Command reference](cli.md) — every command and flag.
 - [`SPEC.md`](https://github.com/satya1395/reble/blob/main/SPEC.md) — the
