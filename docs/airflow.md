@@ -160,10 +160,22 @@ three shapes, honestly:
 worker, a long-running ECS task): nothing to do. The project directory
 and its `.reble/` live on the worker's disk; state survives restarts.
 
-**2. Ephemeral pods** (KubernetesExecutor, autoscaling groups, CI
-runners): mount the project directory — *including* `.reble/` — from
-persistent storage (a PVC, EFS, or whatever your platform gives you) so
-tasks share it:
+**2. Shared Postgres state** (recommended for production): one config
+line, no PVC, no EFS. Your Airflow deployment already runs a Postgres —
+point Reble at it:
+
+```yaml title="reble.yml"
+state:
+  store: postgres
+  uri: ${REBLE_STATE_URI}   # airflow://user:pass@host:5432/reble_state
+```
+
+Workers connect over the network, state is shared across pods, and
+concurrent writers to different change-sets hit different rows. Install
+`reble[postgres]` in the worker image.
+
+**3. Ephemeral pods with a PVC** (if you prefer a mount): mount the
+project directory — *including* `.reble/` — from persistent storage:
 
 ```yaml
 volumeMounts:
@@ -174,7 +186,7 @@ volumes:
     persistentVolumeClaim: { claimName: reble-warehouse }
 ```
 
-**3. No persistence at all** (each task gets a fresh checkout): still
+**4. No persistence at all** (each task gets a fresh checkout): still
 works for `reble run --refresh` — scope comes entirely from the catalog,
 not local state. What you lose: promote-resume-across-retries and
 change-set continuity between tasks. Fine for nightly refresh-only DAGs;
@@ -193,8 +205,9 @@ What lives where, for reference:
 - **Iceberg catalog** (durable, shared, worker-agnostic): branch refs,
   pin tags, snapshots, provenance — and the snapshot timestamps that
   `--refresh` scopes from.
-- **`.reble/` on the worker** (needs the decision above): change-set ↔
-  data-branch mappings, run hashes, promote progress, duckdb spill.
+- **`.reble/` on the worker** (local SQLite by default; Postgres via
+  `state.store: postgres` for shared state): change-set ↔ data-branch
+  mappings, run hashes, promote progress.
 
 ## Setup notes
 

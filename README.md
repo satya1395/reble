@@ -149,6 +149,10 @@ provenance (`reble.model`, `reble.ast_hash`, `reble.run_id`) in its summary —
 
 ## Runs itself — no manual runs required
 
+State lives in SQLite locally (zero-config) or in Postgres for shared
+teams (`state.store: postgres` with a URI — one line in `reble.yml`,
+validated at startup, no PVC or shared filesystem needed).
+
 The verbs are idempotent and the exit codes are a contract, so any job can
 drive Reble: scheduled, or triggered by whatever lands your data. A double
 trigger is harmless — a quiet night computes an empty scope from one

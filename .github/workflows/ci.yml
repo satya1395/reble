@@ -13,6 +13,18 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     runs-on: ${{ matrix.os }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: reble
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -26,3 +38,5 @@ jobs:
         run: uv run ruff check src/reble/ tests/
       - name: Test
         run: uv run pytest tests/ -q
+        env:
+          REBLE_PG_TEST_URI: postgresql://postgres:reble@localhost:5432/postgres

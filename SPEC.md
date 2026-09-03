@@ -48,14 +48,17 @@ must justify itself in the description.
 ```
 reble.yml            # project config — versioned in git
 .reble/              # machine-local state — gitignored (init adds the entry)
-  state.json         # change-set ↔ data-branch mapping (keyed by change-set id;
-                     #   each entry records key_source: git | explicit | env),
-                     #   branch epochs, pins, base heads
-  runs/<id>/         # run manifests: scope, pins, engine, timings, results
-                     #   (results carry the model SQL bundle — provenance)
-  promote.json       # re-entrant promote record (per-table fast-forward status)
+  state.db           # SQLite by default; Postgres via state.store=postgres
+                     #   (change-set↔branch mappings, run hashes, promote records,
+                     #    run manifests with SQL bundles — SaaS-forward schema)
   spill/             # duckdb temp directory when memory_limit is exceeded
 ```
+
+**State backend** (`state:` in reble.yml): `local` (SQLite at
+`.reble/state.db`, zero-config default) or `postgres` (shared state via
+`state.uri`). Validated at startup — exit 2 before any verb if the
+backend is unreachable. Schema is documented above for ecosystem tools;
+JSON payloads are readable, not opaque.
 
 `state.json` and everything under `.reble/` is machine-local. Change-set ids
 are sanitized into data-branch names; a collision with another writer's

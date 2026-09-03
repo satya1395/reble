@@ -263,3 +263,24 @@ from accepted kinds (build fails on it with a pointer), spec invariant 6
 reworded to the replace-never-append truth, and the key header stands alone
 as the diff key. Incremental execution (watermark / insert-overwrite) is a
 0.5 roadmap item; the kind returns when it is real.
+
+## 24. SQL-backed state: SQLite local, Postgres remote, validated
+
+`state.json`/`promote.json`/`runs/*.json` replaced by one SQLAlchemy
+implementation over two engines: SQLite at `.reble/state.db` (WAL mode,
+zero-config default — no new dependency) and Postgres via `state.uri`
+(`reble[postgres]` extra). Row-scoped UPSERT per change-set — different
+change-sets never conflict. Validated at `Reble.__init__` (exit 2 before
+any verb if the backend is unreachable). Legacy `state.json` auto-imports
+on first use.
+
+Schema is SaaS-forward: `reble_run_manifests.changeset` supports team
+timeline grouping; JSON payloads stay readable and documented in SPEC
+for ecosystem tools (the dbt `manifest.json` lesson). The hosted
+StateStore (`state.store: reble`) will implement the same interface,
+adding concurrency arbitration and multi-table atomic promotion.
+
+The open-core boundary: local state makes branching *work* (OSS);
+shared state makes it *multiplayer* (also OSS — production viability is
+not paywalled). The SaaS layer adds hosted effortlessness, not gated
+functionality.
