@@ -3,14 +3,14 @@ title: "CLI reference"
 description: "Every command, flag, envelope, and exit code."
 ---
 Every command accepts the global flags `--config PATH`, `--profile NAME`,
-`--json`, `--no-color`, `--quiet`. Machine consumers: `--json` emits the
-stable envelope (SPEC §6), and `run`/`diff` accept `--events` for versioned
-NDJSON progress. Exit codes are a contract (SPEC §8) — the common ones are
-noted per command.
+`--json`, `--no-color`, `--quiet`. Exit codes are a contract; the common ones
+are noted per command.
 
-Normative detail, including the envelope shape, is in
-[`SPEC.md`](https://github.com/satya1395/reble/blob/main/SPEC.md). The
-[`reble.yml` schema](config.md) has its own page.
+Machine consumers want
+[Exit codes and JSON output](/reble/exit-codes/) — the envelope shape, the
+event streams, and what each exit code means. The `reble.yml` schema is in
+[Configuration](/reble/config/). `SPEC.md` in the repo is the normative
+source for both.
 
 ## Global flags
 
@@ -87,7 +87,7 @@ reble run --engine spark         # one-off engine override
 | `--engine duckdb\|spark` | Override `compute_policy.prefer` for this run. |
 | `--change-set ID` | Key the work by this id. Precedence: this flag → `REBLE_CHANGE_SET` → the git branch. With `git_sync: false` and none of these, the key is `local`; with `git_sync: true` and no git branch, Reble exits `2`. |
 | `--branch NAME` | Resume an existing data branch under this change-set. |
-| `--events` | Stream `run.model.begin` / `run.model.end` NDJSON events on stdout (implies `--json`). |
+| `--events` | Stream NDJSON progress events on stdout: `run.begin`, `model.start`, `model.end`, `run.end`. Implies `--json`. See [event streams](/reble/exit-codes/#event-streams). |
 
 Idempotent per model; a model skips only when its SQL is unchanged *and*
 no in-scope parent ran. Re-runs replace, never append. An empty-scope `run`
@@ -120,6 +120,7 @@ coexist.
 | `--rows N` | Save N sample rows per category (default: `diff.max_rows_dumped`, 1000). |
 | `--full` | Save all changed rows, ignoring the cap. |
 | `--schema-only` | Schema deltas only; no row work. |
+| `--events` | Stream NDJSON progress on stdout: `diff.table.begin`, `diff.table.end`. Implies `--json`. |
 
 Exits `7` when a table has no diff key and `on_missing_key: error`.
 

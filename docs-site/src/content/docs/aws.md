@@ -1,5 +1,5 @@
 ---
-title: "AWS (Glue + S3)"
+title: "Quickstart on AWS (Glue + S3)"
 description: "Run Reble against your own Glue catalog and S3 bucket."
 ---
 Run Reble against your AWS account: Glue as the catalog, S3 as the
@@ -277,7 +277,7 @@ ingest >> BashOperator(
 
 Install `reble[aws]` in the worker image, pass credentials the way you
 already do, and the refresh scopes itself from whatever the ingest just
-landed. The full pattern book is in the [Airflow guide](airflow.md).
+landed. The full pattern book is in the [Airflow guide](/reble/airflow/).
 
 ## Troubleshooting
 

@@ -1,25 +1,27 @@
 ---
-title: "Airflow"
-description: "Reble as the step your scheduler runs."
+title: "Airflow and CI"
+description: "Reble as the step your scheduler runs: Airflow DAG patterns, GitHub Actions, and PR checks."
 ---
 
 import Mermaid from "../../components/Mermaid.astro";
 
-Keep your Airflow. Reble doesn't replace it, wrap it, or sit beside it —
-it's the **one command your refresh DAG runs**. Airflow decides *when*
-(schedules, retries, alerts); `reble run --refresh` does the refresh:
-derives what changed, rebuilds exactly that, in dependency order, into
-your Iceberg tables.
+Reble is the command your refresh DAG runs. Airflow keeps deciding *when* —
+schedules, retries, alerts — and `reble run --refresh` does the refresh:
+derives what changed, rebuilds exactly that, in dependency order, into your
+Iceberg tables.
 
-If you currently have a task per SQL query, those tasks collapse into
-one — the dependency wiring between them stops being something you
-maintain, because Reble reads it out of the SQL.
+If you currently have a task per SQL query, those tasks collapse into one.
+The dependency wiring between them stops being something you maintain,
+because Reble reads it out of the SQL.
 
-## What happens when the task fails mid-run?
+This page covers Airflow DAG patterns first, then the same job in GitHub
+Actions and as a pull-request check.
 
-The fear is reasonable: twenty models' worth of tasks collapsed into one
-command — so when it fails at model 7, does the retry duplicate data or
-re-run everything? Neither:
+## When a task fails mid-run
+
+Twenty models' worth of tasks collapsed into one command raises a fair
+question: when it fails at model 7, does the retry duplicate data or re-run
+everything? Neither.
 
 - **No duplicate data, ever.** Every model materializes as
   replace-never-append, and each table's commit is atomic. A model is
@@ -153,6 +155,52 @@ Three properties make promote safe as an automated step:
 And the review artifact is the thing reviewers actually want: the gate's
 `reble diff` shows the exact rows the change adds, removes, and modifies
 — not a wall of SQL.
+
+## Without Airflow: GitHub Actions
+
+The same command, no scheduler to operate. Your ingestion job can dispatch it
+when new data lands:
+
+```yaml title=".github/workflows/refresh.yml"
+on:
+  schedule: [{cron: "0 3 * * *"}]
+  workflow_dispatch:
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install reble
+      - run: reble run --refresh && reble gc
+        env:
+          REBLE_CHANGE_SET: local     # catalog + warehouse creds as secrets
+```
+
+A plain crontab line works just as well:
+
+```bash
+0 3 * * * cd /srv/warehouse && reble run --refresh && reble gc
+```
+
+## Pull-request checks
+
+Pull requests are jobs too, and the two read-only verbs make cheap gates:
+
+```yaml
+      - run: reble status          # exit 3 if a pinned input drifted
+      - run: reble diff            # the rows this PR changes
+```
+
+`reble status` is read-only and exits `3` on drift, so it works as a required
+check without touching production. `reble diff` prints the row-level
+consequences into the job log, which is the review artifact SQL review does
+not give you.
+
+Remember that a PR-time diff is advisory. The authoritative diff is computed
+at promote time, after any forced re-run — see
+[Branches and promotion](/reble/branches/#advisory-and-authoritative-diffs).
+Full exit-code semantics are in
+[Exit codes and JSON output](/reble/exit-codes/).
 
 ## `.reble/` in production Airflow
 

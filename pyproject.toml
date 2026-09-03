@@ -1,7 +1,7 @@
 [project]
 name = "reble"
 dynamic = ["version"]
-description = "Git-style branching for Iceberg data warehouses: scoped branches, row-level diffs, fast-forward promotion."
+description = "An open SQL engine for your Iceberg lakehouse: scoped zero-copy branches, row-level diffs, fast-forward promotion."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }

@@ -14,7 +14,7 @@ promote.
 
 **DuckDB** is the right default. Reads stream out-of-core through
 `iceberg_scan` and spill under `memory_limit` — measured, a 1M-row
-lifecycle over S3 runs in ~30s from a laptop ([numbers](performance.md)).
+lifecycle over S3 runs in ~30s from a laptop ([numbers](/reble/performance/)).
 It starts in milliseconds and has no JVM.
 
 **Spark** is for the jobs DuckDB genuinely can't do: joins whose working
@@ -65,7 +65,31 @@ Reads resolve through Spark version travel — `tbl VERSION AS OF
 DataFrameWriterV2 with `snapshot-property.*` options, which is the only
 path that carries provenance into the snapshot summary on Spark 3.5.
 
-## Honest limits
+## Configuration keys
+
+Both engines take a free-form settings block under `engines` in `reble.yml`.
+
+**`engines.duckdb`**
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `read_mode` | `auto` | `auto` uses `iceberg_scan` (streaming, out-of-core). `arrow` materializes through PyArrow instead. |
+| `memory_limit` | — | DuckDB's memory ceiling, e.g. `4GB`. Reads spill past it rather than failing. |
+| `temp_directory` | `.reble/spill` | Where spilled data goes. |
+| `settings` | `{}` | Raw `SET` passthrough. Overrides Reble's S3 auto-configuration, so use it deliberately. |
+
+**`engines.spark`**
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `master` | `local[*]` | Spark master URL. |
+| `app_name` | `reble` | Application name shown in the Spark UI. |
+| `settings` | `{}` | Raw Spark conf. A `packages` key here replaces the default Iceberg runtime jars. |
+
+Pick the engine with `compute_policy.prefer`, or per run with
+`reble run --engine spark`. See [Configuration](/reble/config/#engines).
+
+## Limits
 
 - **Diffs still run on DuckDB** regardless of engine. Diffing is read-only
   compute; DuckDB spills under `memory_limit`. If real workloads hit that
@@ -73,3 +97,8 @@ path that carries provenance into the snapshot summary on Spark 3.5.
 - The Spark engine writes **unpartitioned tables**, like the DuckDB
   engine — v0 model outputs are flat full-refresh builds.
 - A JVM (17+) is required. macOS/Linux x86_64/arm64 both work.
+
+## Next
+
+- [Configuration](/reble/config/#engines) — where these keys live in `reble.yml`.
+- [Performance](/reble/performance/) — measured numbers for both engines.

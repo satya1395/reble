@@ -107,12 +107,26 @@ cat.create_table(
 python seed.py
 ```
 
-First run — a fresh project has no run history, so declare the scope
-explicitly (after this, Reble derives it from your edits):
+First run. A fresh project has no run history, so there are no SQL hashes to
+compare against and the inferred scope is empty — declare it explicitly this
+once:
 
 ```bash
-reble run --models stg_orders,mart_orders
+reble run --models stg_orders,mart_orders,report_daily
 ```
+
+```
+scope (edited)       3   mart_orders, report_daily, stg_orders
+scope (downstream)   0   -
+pinned inputs        1   reble_pin__local__raw_events
+engine                 duckdb (local)
+stg_orders: ran (3 rows, 113ms)
+mart_orders: ran (3 rows, 50ms)
+report_daily: ran (3 rows, 48ms)
+```
+
+There is no `--models all`; use `reble run --force` when you mean everything.
+Every later run infers its own scope.
 
 Now make a real change and give it a branch:
 
@@ -121,16 +135,41 @@ git switch -c tighten-filter
 $EDITOR models/stg_orders.sql     # amount > 0  →  amount > 15
 
 reble run        # scope inferred: stg_orders + everything downstream
+```
+
+```
+scope (edited)       1   stg_orders
+scope (downstream)   2   mart_orders, report_daily
+pinned inputs        1   reble_pin__local__raw_events
+stg_orders: ran (2 rows, 145ms)
+mart_orders: ran (2 rows, 50ms)
+report_daily: ran (2 rows, 48ms)
+```
+
+You edited one model; Reble worked out the other two.
+
+```bash
 reble diff mart_orders
-#   analytics.mart_orders:  +2 -0 ~0  (order 1 drops below the filter)
+```
+
+```
+diffing analytics.mart_orders …  +2 -0 ~0 (0.1s)
+detail: .reble/diffs/local (per-table JSON; --rows N / --full for more)
+```
+
+The terminal prints the summary; the changed rows themselves are written to
+`.reble/diffs/<change-set>/<table>.json`. Use `--rows N` to save more per
+category, or `--full` for all of them.
+
+```bash
 reble status     # clean — nothing drifted
-reble promote    # fast-forward main; verify: the rows are there
+reble promote    # fast-forward main
 ```
 
 No git repo? Same verbs, keyed by an explicit change-set:
 `reble run --change-set agent-42 --models ...`, then pass
 `--change-set agent-42` to diff/status/promote. See
-[Git, optional](git.md#standalone-mode-no-git-same-verbs).
+[Git, optional](/reble/running/#how-work-is-keyed).
 
 ## Watch the guardrails
 
@@ -158,15 +197,12 @@ reble promote           # re-pins, re-runs the scope, emits the authoritative
                         # promote-time diff, then fast-forwards
 ```
 
-The drift check is the heart of the safety story: promote is legal only when
-every pinned input still equals production. Exit codes are a contract —
+Promote is legal only when every pinned input still equals production. Exit codes are a contract —
 `3` = drift, `4` = promote blocked, `5` = empty scope, `6` = lineage error,
 `7` = missing diff key. CI can (and should) branch on them.
 
 ## Where to go next
 
-- [Core concepts](models.md) — models, scope, pinning, and why there is
-  no merge.
-- [Command reference](cli.md) — every command and flag.
-- [`SPEC.md`](https://github.com/satya1395/reble/blob/main/SPEC.md) — the
-  normative specification, if you want the fine print.
+- [How Reble works](/reble/how-it-works/) — the whole loop in one page.
+- [Quickstart on AWS](/reble/aws/) — the same walkthrough against Glue + S3.
+- [CLI reference](/reble/cli/) — every command and flag.

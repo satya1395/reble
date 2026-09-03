@@ -2,16 +2,34 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
 // Docs for Reble — served at https://satya1395.github.io/reble/
-// Sidebar groups follow the reader-intent pattern (learn → do → evaluate →
-// lookup), with flat slugs so URLs match the previous mkdocs site exactly.
+//
+// Sidebar order follows the reader: evaluate (Start here) → understand
+// (Concepts) → operate (Guides) → look up (Reference). Slugs stay flat so
+// URLs match the previous mkdocs site; pages that were merged away keep
+// working through `redirects` below.
 export default defineConfig({
   site: "https://satya1395.github.io",
   base: "/reble",
+
+  // Pages merged into chapters during the 2026-09 docs consolidation.
+  // Keep these: they are linked from the README, PyPI, and outside.
+  redirects: {
+    "/scope": "/reble/models/",
+    "/pins": "/reble/branches/",
+    "/promote": "/reble/branches/",
+    "/git": "/reble/running/",
+    "/refreshes": "/reble/running/",
+    "/incremental": "/reble/running/",
+    "/scenarios": "/reble/comparisons/",
+    "/replaces": "/reble/comparisons/",
+    "/concepts": "/reble/how-it-works/",
+  },
+
   integrations: [
     starlight({
       title: "Reble",
       description:
-        "Git-style branching for Iceberg data warehouses: scoped branches, row-level diffs, fast-forward promotion.",
+        "An open SQL engine for your Iceberg lakehouse: scoped zero-copy branches, row-level diffs, fast-forward promotion.",
       editLink: {
         baseUrl: "https://github.com/satya1395/reble/edit/main/docs-site",
       },
@@ -21,54 +39,44 @@ export default defineConfig({
       customCss: ["./src/styles/custom.css"],
       sidebar: [
         {
-          label: "Getting started",
+          label: "Start here",
           items: [
             { label: "Introduction", link: "/" },
             { label: "Quickstart", slug: "getting-started" },
+            { label: "Quickstart on AWS", slug: "aws" },
           ],
         },
         {
-          label: "Core concepts",
-          items: [
-            { label: "Models", slug: "models" },
-            { label: "Scope", slug: "scope" },
-            { label: "Refreshes", slug: "refreshes" },
-            { label: "Incremental & retries", slug: "incremental" },
-            { label: "Pins", slug: "pins" },
-            { label: "Promote or discard", slug: "promote" },
-            { label: "Git, optional", slug: "git" },
-          ],
-        },
-        {
-          label: "Architecture",
+          label: "Concepts",
           items: [
             { label: "How Reble works", slug: "how-it-works" },
-            { label: "Iceberg refs", slug: "iceberg-refs" },
+            { label: "Models and lineage", slug: "models" },
+            { label: "Branches and promotion", slug: "branches" },
+            { label: "Running and scheduling", slug: "running" },
           ],
         },
         {
           label: "Guides",
           items: [
-            { label: "AWS (Glue + S3)", slug: "aws" },
-            { label: "Airflow", slug: "airflow" },
-            { label: "Engines", slug: "engines", badge: "New" },
+            { label: "Airflow and CI", slug: "airflow" },
+            { label: "Engines", slug: "engines" },
             { label: "Performance", slug: "performance" },
-          ],
-        },
-        {
-          label: "Why Reble",
-          items: [
-            { label: "Days you've had", slug: "scenarios" },
-            { label: "What Reble replaces", slug: "replaces" },
-            { label: "Comparisons", slug: "comparisons" },
           ],
         },
         {
           label: "Reference",
           items: [
-            { label: "CLI", slug: "cli" },
+            { label: "CLI reference", slug: "cli" },
             { label: "Configuration", slug: "config" },
+            { label: "Exit codes and JSON output", slug: "exit-codes" },
+            { label: "MCP and agents", slug: "mcp" },
+            { label: "Comparisons", slug: "comparisons" },
+            { label: "Glossary", slug: "glossary" },
           ],
+        },
+        {
+          label: "Deep dive",
+          items: [{ label: "Iceberg refs", slug: "iceberg-refs" }],
         },
       ],
     }),

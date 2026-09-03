@@ -4,9 +4,11 @@ description: "The primitive Reble is built on, and exactly how it's used."
 ---
 import Mermaid from "../../components/Mermaid.astro";
 
-Everything Reble does reduces to one Apache Iceberg feature: **refs**.
-This page explains what they are and precisely how Reble uses them — worth
-reading once, because after it the whole CLI reads as obvious.
+Everything Reble does reduces to one Apache Iceberg feature: **refs**. This
+page explains what they are and exactly how Reble uses them.
+
+This is optional reading. Reble is usable without it — but after it, the CLI
+reads as obvious rather than magical.
 
 ## What an Iceberg table actually is
 
@@ -18,14 +20,14 @@ byte-identical results forever, even after a thousand more commits.
 
 A **ref** is a named pointer to a snapshot. Iceberg has two kinds:
 
-- **`main`** — the table's current snapshot. What every other tool reads.
 - **branch** — a movable pointer that records its own history of commits.
-- **tag** — an immutable pointer. A bookmark.
+  `main` is the branch every other tool reads.
+- **tag** — an immutable pointer at one snapshot.
 
 Refs live in table metadata. Creating one writes a small JSON file — no
 data is touched. That is the whole trick:
 
-> A "copy" of a 5M-row table costs one metadata write: 10 ms, zero bytes.
+> A "copy" of a 5M-row table costs one metadata write: < 10 ms, zero bytes.
 
 Two tables never share refs — branches are **per-table**, which is why
 Reble's promote is per-table (more on that below).
@@ -54,8 +56,8 @@ head. `main` is untouched until you promote.
 One subtlety: Iceberg can't hang a branch off a table with zero
 snapshots. So a model's first-ever run creates the table with one
 **zero-row seed snapshot on main**, marked `reble.seed: true` in the
-snapshot summary, and branches from that. Main stays empty — the seed is
-a coat hook, not a coat.
+snapshot summary, and branches from that. Main stays empty: the seed exists
+only so the branch has something to attach to.
 
 ### Tags: the pins
 
@@ -65,8 +67,8 @@ that input resolve through the tag for the life of the branch. The
 consequence: you can rerun `reble run` fifty times while production keeps
 ingesting, and get the same answer fifty times.
 
-Tags also do quiet safety work: Iceberg's `expire_snapshots` refuses to
-delete data files that a tag still references. A pin physically protects
+Tags also protect the data they point at. Iceberg's `expire_snapshots`
+refuses to delete data files that a tag still references. A pin physically protects
 the snapshots your branch depends on. (The flip side is why `reble gc`
 exists — a discarded branch whose pin tags linger would block snapshot
 expiry on a production table forever.)
@@ -103,8 +105,8 @@ ordering, because ids are not monotonic across writers.
   against fresh pins, then a fresh diff. `--ff-only` makes it refuse
   outright (exit `4`).
 
-This is why there is no merge. A three-way merge of *data* is a guess
-wearing a lab coat; re-run against current inputs is a guarantee.
+This is why there is no merge. A three-way merge of *data* requires guessing
+what rows were meant to be; a re-run against current inputs does not.
 
 ### The read path
 
@@ -124,7 +126,7 @@ see are the rows that were committed.
 
 | Gesture | Cost |
 | --- | --- |
-| Branch a 5M-row table | ~10 ms, zero bytes copied |
+| Branch a 5M-row table | < 10 ms, zero bytes copied |
 | Rerun a scoped change | reads only the branch's inputs, replaces branch head |
 | Diff branch vs main | keyed SQL over two snapshots — no data movement |
 | Promote (no drift) | one metadata write per table |

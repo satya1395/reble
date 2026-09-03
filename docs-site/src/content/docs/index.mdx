@@ -25,7 +25,7 @@ import demoGif from "./assets/demo.gif";
 <div class="cards">
   <div class="card">
     <h3>Branch your data</h3>
-    <p>Native Iceberg branch refs — a copy of a 5M-row table costs 10 ms and zero bytes. Only the change's blast radius.</p>
+    <p>Native Iceberg branch refs — a copy of a 5M-row table costs under 10 ms and zero bytes. Only the change's blast radius.</p>
   </div>
   <div class="card">
     <h3>Diff the rows</h3>
@@ -60,6 +60,16 @@ Data teams can't safely try things. Four gaps compound:
 Reble is the workflow layer on top of that last point: scoped branches,
 deterministic inputs, row-level diffs, and a promote you can trust.
 
+## Is this you?
+
+- You need to add a column to a mart 40 models depend on, and the five-minute
+  SQL change costs a week of verification.
+- A filter change silently dropped 300 rows and nobody caught it in review.
+- Testing anything means queueing for the one staging warehouse everyone
+  shares.
+- A backfill means scripts, a maintenance window, and hoping the snapshot was
+  from the right moment.
+
 ## The loop
 
 ```bash
@@ -76,12 +86,10 @@ reble promote                   # fast-forward main — or a scoped re-run with 
                                 # fresh diff if main moved. No merge. Ever.
 ```
 
-That's the whole product. Start with a story you've lived —
-[Days you've had](scenarios.md) — see exactly
-[what Reble replaces](replaces.md) in your stack, or walk the loop end to
-end in [Getting started](getting-started.md). The concepts build up one at
-a time: [models](models.md) → [scope](scope.md) → [pins](pins.md) →
-[promote](promote.md).
+That's the whole product. Walk it end to end in the
+[Quickstart](/reble/getting-started/), understand it in one page with
+[How Reble works](/reble/how-it-works/), or see what it replaces in your
+stack in [Comparisons](/reble/comparisons/).
 
 ## Where it sits
 
@@ -101,7 +109,7 @@ a time: [models](models.md) → [scope](scope.md) → [pins](pins.md) →
 
 Reble owns the transformation layer (the shape dbt-core has); your
 scheduler owns *when*; your catalog and bucket stay yours. State lives
-in SQLite locally or in [Postgres for shared teams](airflow.md#reble-in-production-airflow)
+in SQLite locally or in [Postgres for shared teams](/reble/airflow/#reble-in-production-airflow)
 — one config line.
 
 ## What makes it different
@@ -115,19 +123,17 @@ There is deliberately **no merge**. Promote is a fast-forward when your
 pinned inputs still match production, and a scoped re-run when they don't.
 Data merges with conflict resolution silently corrupt warehouses; Reble
 refuses to build one. The full argument is in
-[where the git analogy breaks](git.md#where-the-analogy-breaks-merge).
+[where the git analogy breaks](/reble/branches/#there-is-no-merge).
 
 And it runs against **the catalog you already have** — Glue, Polaris,
 Nessie, Hive, or any REST-compliant Iceberg catalog. Reble is not a catalog,
 not an orchestrator, and not a new thing to operate. How that stacks up
 against lakeFS, Nessie, and warehouse clones:
-[Comparisons](comparisons.md).
+[Comparisons](/reble/comparisons/).
 
 :::note[Status: early, but real]
 The full loop works today — `init → run → diff → status → promote`, in git
-or standalone, with 101 passing tests on Linux and macOS and the Spark
-engine verified against real Glue + S3. `pip install reble` and go.
-Feedback is by far the most valuable contribution right now —
-[open a discussion](https://github.com/satya1395/reble/discussions) — and
-the [docs site](/reble/) you're reading is built from this repo.
+or standalone, with the Spark engine verified against real Glue + S3.
+Feedback is the most valuable contribution right now:
+[open a discussion](https://github.com/satya1395/reble/discussions).
 :::

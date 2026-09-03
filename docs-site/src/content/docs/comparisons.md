@@ -1,10 +1,47 @@
 ---
 title: "Comparisons"
-description: "vs lakeFS, Nessie, warehouse clones, dbt."
+description: "What Reble replaces in your stack, and how it stacks up against lakeFS, Nessie, warehouse clones, and dbt."
 ---
-The honest one-paragraph version of each, said the way we'd want it said
-about us. For the stack-level view — what stays, what goes — see
-[What Reble replaces](replaces.md).
+> **Reble replaces the transformation layer and the staging environment. It
+> shrinks the orchestrator and the compute bill. It leaves ingestion,
+> storage, the catalog, and BI alone.**
+
+This page is the evaluation page: what changes in your stack, which team you
+are, and the one-paragraph version of every tool people ask us about.
+
+## Layer by layer
+
+| Stack layer | Today | With Reble |
+| --- | --- | --- |
+| Ingestion | Fivetran, Airbyte, Kafka, Flink | unchanged |
+| Storage + table format | S3/GCS + Iceberg | unchanged (yours) |
+| Catalog | Glue, Hive, Polaris, Nessie | unchanged (yours) |
+| Transformation | dbt, homegrown runners, webapps, stored procs | **replaced** |
+| Test environments | staging warehouse, schema copies | **replaced by branches** |
+| Orchestration | Airflow, Dagster, cron | kept, but shrunk to *when* |
+| Transform compute | warehouse seats, Spark clusters | DuckDB embedded (Spark behind the same interface) |
+| Data quality | dbt tests, Great Expectations | complementary — diffs verify, assertions assert |
+| Lineage tooling | OpenLineage, wiki diagrams | mostly obviated — parsed, not maintained |
+| Backfills | scripts and windows | a branch: frozen inputs, diff, promote |
+
+What Reble never does: move data in, store it, catalog it, serve
+dashboards, or decide when anything runs. Every "unchanged" row is also a
+"works with what you have."
+
+## Which team are you?
+
+**The dbt team.** Reble is dbt-core plus its build orchestration plus the
+staging clone — minus the YAML and Jinja. Migration is "point Reble at the
+models directory"; your SQL ports almost unchanged.
+
+**The SQL + Airflow team.** The hand-maintained wiring inside the DAG goes
+away — a table reference to another model *is* the dependency; nobody
+configures edges anymore. Airflow survives as the clock. See the
+[Airflow and CI guide](/reble/airflow/) for the patterns.
+
+**The internal-webapp team.** The webapp's whole job — store SQLs, wire
+dependencies, schedule runs, pray — is the engine. This is the deepest
+displacement: something you built and maintain stops needing to exist.
 
 ## Reble vs lakeFS
 

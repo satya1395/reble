@@ -16,7 +16,7 @@ a copy of the warehouse for testing changes. You refresh it, you queue for
 it, you hope it still matches prod — and you pay for it twice. The Apache Iceberg
 table format already has the primitive that makes it unnecessary: a branch
 ref is
-metadata-only, so a "copy" of a 5M-row table costs **10 ms and zero
+metadata-only, so a "copy" of a 5M-row table costs **under 10 ms and zero
 bytes** on any compliant catalog. What was missing is the *workflow* —
 deciding what a change touches, making its inputs reproducible, showing
 what it will do to production rows before anyone accepts it.
@@ -29,7 +29,7 @@ and fast-forwards production when you accept. There is no merge step, on
 purpose: promote or discard, never three-way-merge data, because data
 merges are where correctness goes to die.
 
-![The Reble loop: build, edit on a branch, diff the rows, promote](docs-site/src/content/docs/assets/demo.gif)
+![The Reble loop: build, edit on a branch, diff the rows, promote](https://raw.githubusercontent.com/satya1395/reble/main/docs-site/src/content/docs/assets/demo.gif)
 
 ## How it works
 
@@ -235,8 +235,8 @@ under a new change-set.
 
 ## Documentation
 
-- [**Docs site**](https://satya1395.github.io/reble/) — getting started,
-  concepts, comparisons, and the command reference.
+- [**Docs site**](https://satya1395.github.io/reble/) — quickstart, concepts,
+  guides, and the CLI, config, and exit-code references.
 - [`SPEC.md`](SPEC.md) — normative CLI specification (v0.2): invariants,
   on-disk layout, `reble.yml` schema, command reference, JSON envelope,
   event streams, provenance, exit codes.

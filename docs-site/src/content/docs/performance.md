@@ -2,9 +2,9 @@
 title: "Performance"
 description: "Measured numbers, reproducible benchmarks."
 ---
-Every number on this page is **measured, reproducible, and honest about its
-limits** — laptop hardware, list-price regions, no clusters. Run the
-commands yourself; scripts are in the repo.
+Every number here was measured on the hardware named beside it: a laptop,
+list-price regions, no clusters. The scripts are in the repo, so you can
+reproduce any of them.
 
 ## Is DuckDB enough?
 
@@ -22,9 +22,9 @@ measured answer is yes, at sizes well past a small team's warehouse:
   table over S3 runs in ~4 s from a laptop.
 
 Where DuckDB ends — single-node joins that exceed memory even with spill,
-warehouse-concurrent serving — is where the Spark runner (same engine
-interface) takes over. Nobody has hit that line with us yet; when someone
-does, it's a config change, not a migration.
+warehouse-concurrent serving — is where the Spark runner takes over, behind
+the same engine interface. Crossing that line is a config change, not a
+migration.
 
 ## Measured: full lifecycle on AWS (Glue + S3, us-east-1, laptop)
 
@@ -71,3 +71,8 @@ scale.
   product doing its real verbs.
 - Your numbers will vary with region, network, and table width. The shape
   is the claim: laptop, no cluster, real warehouse sizes, honest timings.
+
+## Next
+
+- [Engines](/reble/engines/) — when to move from DuckDB to Spark, and how.
+- [Iceberg refs](/reble/iceberg-refs/) — why branching costs what it costs.

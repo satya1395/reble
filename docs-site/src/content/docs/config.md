@@ -3,7 +3,7 @@ title: "Configuration"
 description: "The complete reble.yml reference."
 ---
 `reble.yml` is the project config — versioned in git, one per project. It
-is written by [`reble init`](cli.md#reble-init) and validated before any
+is written by [`reble init`](/reble/cli/#reble-init) and validated before any
 verb runs (exit `2` on a bad file). Secrets never live here: they come
 from `${ENV_VAR}` interpolation, and `init` refuses to save values that
 look like secrets.
@@ -16,6 +16,7 @@ version: 1
 warehouse:
   catalog:
     type: glue                 # glue|polaris|nessie|hive|rest|reble|sql|in-memory|dynamodb|bigquery
+    # any other key here is passed straight through to pyiceberg
     region: us-east-1          # translated to glue.region for you
     warehouse: s3://my-bucket/reble
     # uri: https://...         # required for rest/polaris/nessie
@@ -66,6 +67,12 @@ profiles:
 
 ## warehouse
 
+`warehouse.catalog` accepts extra keys beyond the ones below and passes them
+straight to pyiceberg. That is why `region`, `uri`, and `name` work without
+Reble declaring them: a catalog-specific option goes in the same block. Reble
+translates `region` to `glue.region` for you.
+
+
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `catalog.type` | — | Which catalog holds your tables — see the guide below. |
@@ -93,7 +100,7 @@ catalog itself.
 
 | Type | What it is | Use it for |
 | --- | --- | --- |
-| `glue` | AWS Glue Data Catalog. Tables in Glue, data in your S3 bucket (`warehouse: s3://…`). Reble resolves credentials with your normal AWS setup. | AWS stacks — see the [AWS guide](../aws.md). |
+| `glue` | AWS Glue Data Catalog. Tables in Glue, data in your S3 bucket (`warehouse: s3://…`). Reble resolves credentials with your normal AWS setup. | AWS stacks — see the [AWS guide](/reble/aws/). |
 | `hive` | A Hive metastore. | Existing Hadoop-era stacks. |
 | `rest` | Any catalog speaking the Iceberg REST spec (`uri` required). | Self-hosted REST catalogs. |
 | `polaris` / `nessie` | REST-spec catalogs with their own conveniences. | Snowflake Polaris, Project Nessie. |
@@ -113,8 +120,8 @@ which to pick: `sql` to try Reble in the next five minutes, `glue` or
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `git_sync` | `true` | Derive the change-set id from the current git branch. Set `false` for standalone projects with no git repo — change-sets then come from `--change-set` / `REBLE_CHANGE_SET`. See [Git, optional](git.md). |
-| `pin_inputs` | `true` | Tag-pin upstream inputs at run time so reruns are reproducible. [Why](iceberg-refs.md#pins). |
+| `git_sync` | `true` | Derive the change-set id from the current git branch. Set `false` for standalone projects with no git repo — change-sets then come from `--change-set` / `REBLE_CHANGE_SET`. See [Git, optional](/reble/running/). |
+| `pin_inputs` | `true` | Tag-pin upstream inputs at run time so reruns are reproducible. [Why](/reble/iceberg-refs/#tags-the-pins). |
 | `tag_prefix` | `reble_pin__` | Namespace for pin tags, so they are recognizable in the catalog. |
 | `ttl_days` | `14` | Branch age at which `reble gc` expires it. |
 | `name_sanitization` | `{"/": "__", " ": "_"}` | Characters replaced when a git branch name becomes a data branch ref. |
@@ -140,7 +147,7 @@ versions auto-migrates on first use.
 
 ## engines
 
-**duckdb** — see [Engines](engines.md). `read_mode: auto` streams reads
+**duckdb** and **spark** — the full key tables are in [Engines](/reble/engines/#configuration-keys). `read_mode: auto` streams reads
 through `iceberg_scan` (out-of-core, spills under `memory_limit` to
 `temp_directory`); `arrow` forces materialized reads. `settings` is a raw
 `SET` passthrough and takes full responsibility for S3 config (otherwise
