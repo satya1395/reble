@@ -52,6 +52,33 @@ reble promote             # fast-forward if base is current; forced re-run with
 - See [how Reble compares](https://satya1395.github.io/reble/comparisons/)
   to lakeFS, Nessie, and warehouse clones.
 
+## Runs itself — no manual runs required
+
+The verbs are idempotent and the exit codes are a contract, so any job can
+drive Reble: scheduled, or triggered by whatever lands your data. A double
+trigger is harmless — a quiet night computes an empty scope from one
+catalog listing.
+
+```yaml
+# .github/workflows/refresh.yml — rebuild exactly what moved, nightly and
+# on demand (your ingestion job can dispatch it when new data lands)
+on:
+  schedule: [{cron: "0 3 * * *"}]
+  workflow_dispatch:
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install reble
+      - run: reble run --refresh     # + reble gc to drop expired branches
+        env: { REBLE_CHANGE_SET: local }   # catalog/warehouse creds as secrets
+```
+
+PRs get the same treatment: `reble status` exits 3 on drift and
+`reble diff` prints the row-level consequences — cheap checks to wire into
+any CI.
+
 ## Models are plain SQL
 
 No orchestrator required. `models/**/*.sql` — one file is one model, the file

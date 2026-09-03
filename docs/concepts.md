@@ -97,12 +97,24 @@ fresh project has no run history to infer from.
 
 **Scheduling is deliberately yours.** Cron, GitHub Actions, Airflow — they
 all just invoke one idempotent verb. The *run* is the unit; *when* is not
-Reble's layer. A nightly line in crontab is a complete orchestration setup:
+Reble's layer. That means two patterns, and neither involves a human:
 
-```bash
-# nightly refresh: rebuild exactly what moved
-0 3 * * * cd /srv/warehouse && reble run --refresh && reble gc
-```
+- *Scheduled*: a nightly line in crontab is a complete orchestration setup.
+
+  ```bash
+  0 3 * * * cd /srv/warehouse && reble run --refresh && reble gc
+  ```
+
+- *Event-triggered*: the job that lands your data calls the refresh when it
+  finishes — an Airflow task after ingestion, a GitHub Actions
+  `workflow_dispatch` from the pipeline, a Flink job's completion hook.
+  Because `--refresh` scopes by snapshot movement, triggering it right
+  after an ingest rebuilds exactly that ingest's blast radius; triggering
+  it again later is a no-op. See the README's CI snippet for a runnable
+  GitHub Actions example.
+
+PRs are jobs too: `reble status` (exit 3 on drift) and `reble diff` make
+cheap, meaningful checks in any CI system.
 
 One honest footnote: `incremental` models currently full-refresh everywhere
 (streaming bounds memory, not recompute) until the Spark runner exists.
