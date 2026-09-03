@@ -29,16 +29,24 @@ a change-set id; `REBLE_<SECTION>__<KEY>` overrides any config path
 
 ## reble init
 
-Write `reble.yml`, gitignore `.reble/`, probe catalog connectivity, detect
-`models/`.
+Set up a project in the current directory: write `reble.yml`, gitignore
+`.reble/`, check that the catalog is reachable, find `models/`. Run it
+once per project.
 
 ```bash
 reble init --catalog sql --namespace analytics
 ```
 
-`--catalog` `glue|polaris|nessie|hive|rest|reble|sql|in-memory` ·
-`--engine` `duckdb|spark` · `--namespace` · `--state local|postgres` ·
-`--yes`
+Reads as: *use a catalog that lives in a local file, and put model tables
+in the `analytics` namespace.* Flags:
+
+| Flag | Meaning |
+| --- | --- |
+| `--catalog TYPE` | Where tables are registered. `sql` = local SQLite-backed, zero infra. `glue`, `hive`, `rest`, `polaris`, `nessie` = infrastructure you already run — [which to pick](config.md#which-catalog-type). |
+| `--namespace NAME` | The schema-like prefix for model tables (`stg_orders` → `analytics.stg_orders`). |
+| `--engine duckdb\|spark` | Which engine `compute_policy` prefers. |
+| `--state local\|postgres` | Where Reble keeps its own state (see [state](config.md#state)). |
+| `--yes` / `-y` | Skip confirmation. |
 
 For shared state (multiple workers, CI runners, Airflow):
 

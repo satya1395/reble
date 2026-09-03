@@ -68,13 +68,39 @@ profiles:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `catalog.type` | — | Catalog backend. `sql` and `in-memory` are local (zero infra); `glue`, `hive`, `rest`/`polaris`/`nessie` point at infrastructure you already run. |
+| `catalog.type` | — | Which catalog holds your tables — see the guide below. |
 | `catalog.region` | — | AWS region; Reble translates it to the `glue.region` pyiceberg expects. |
-| `catalog.uri` | — | Required for REST-spec catalogs. |
-| `catalog.warehouse` | — | Table storage location (S3 bucket path, or a local dir for `sql`). |
+| `catalog.uri` | — | Where the catalog lives, for server-based types. |
+| `catalog.warehouse` | — | Where table data is written: an S3 bucket path, or a local folder for the local types. |
 | `catalog.name` | `reble` | Catalog name — part of table identity for SQL-backed catalogs, must be stable. |
-| `namespace` | — | Iceberg namespace where model tables live. |
-| `default_base` | `main` | The ref everything branches from and promotes to. |
+| `namespace` | — | The schema-like prefix for model tables (`stg_orders` → `analytics.stg_orders`). |
+| `default_base` | `main` | The production ref everything branches from and promotes to. |
+
+### Which catalog type
+
+The catalog answers one question: *which tables exist, and where is each
+one's metadata?* Reble works with whatever answers it — it is not a
+catalog itself.
+
+**Runs on your machine, nothing to install:**
+
+| Type | What it is | Use it for |
+| --- | --- | --- |
+| `sql` | The catalog's registry lives in a small SQLite file inside your project; table data in a local folder. Iceberg's standard SQL-catalog schema. | The quickstart, tutorials, CI tests — anything local. Your real projects use one of the types below. |
+| `in-memory` | Same idea, but the registry vanishes when the process exits. | Unit tests that build a catalog from scratch. |
+
+**Infrastructure you already run:**
+
+| Type | What it is | Use it for |
+| --- | --- | --- |
+| `glue` | AWS Glue Data Catalog. Tables in Glue, data in your S3 bucket (`warehouse: s3://…`). Reble resolves credentials with your normal AWS setup. | AWS stacks — see the [AWS guide](../aws.md). |
+| `hive` | A Hive metastore. | Existing Hadoop-era stacks. |
+| `rest` | Any catalog speaking the Iceberg REST spec (`uri` required). | Self-hosted REST catalogs. |
+| `polaris` / `nessie` | REST-spec catalogs with their own conveniences. | Snowflake Polaris, Project Nessie. |
+
+Still listed for completeness: `dynamodb`, `bigquery`. If you don't know
+which to pick: `sql` to try Reble in the next five minutes, `glue` or
+`rest` for everything real.
 
 ## lineage
 
