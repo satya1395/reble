@@ -1,17 +1,17 @@
 /* Reble docs — Starlight customization */
 
+/* Plain black accent (light) / plain white (dark) — no brand color */
 :root,
 :root[data-theme="light"] {
-  --sl-hue: 175;
-  --sl-accent-low: hsl(175 55% 85%);
-  --sl-accent: hsl(175 80% 30%);
-  --sl-accent-high: hsl(175 88% 16%);
+  --sl-accent-low: #ececec;
+  --sl-accent: #000000;
+  --sl-accent-high: #333333;
 }
 
 :root[data-theme="dark"] {
-  --sl-accent-low: hsl(175 45% 18%);
-  --sl-accent: hsl(175 70% 55%);
-  --sl-accent-high: hsl(175 80% 80%);
+  --sl-accent-low: #2a2a2a;
+  --sl-accent: #ffffff;
+  --sl-accent-high: #cccccc;
 }
 
 /* Hero (landing) */
