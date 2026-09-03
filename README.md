@@ -101,6 +101,11 @@ flowchart LR
 - **Promote semantics** — fast-forward only when every pinned base still
   equals current main; otherwise a scoped re-run and a fresh, promote-time
   diff. The PR diff is advisory; the promote diff is authoritative.
+- **Atomic per-table commits** — every model write and every promotion
+  step commits a table atomically: no partial states, no half-applied
+  changes, interrupted work resumes instead of repeating. Cross-table
+  consistency is *verified at promote time* (every pin still equals
+  main) — not reconciled afterward by a merge you have to trust.
 
 ## Performance
 

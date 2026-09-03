@@ -76,13 +76,16 @@ class Runner:
         repin: bool = False,
         changeset_id: str | None = None,
         on_event: EventCallback | None = None,
+        on_model_complete=None,  # Callable[[str, str], None] — (model, ast_hash)
     ) -> RunManifest:
         """Execute the scope on the data branch.
 
         previous_hashes → execution idempotency: scope models whose AST hash
         matches their last run are skipped. repin=True retargets input pins to
         current main (the promote-with-drift re-run path); default keeps the
-        branch-epoch pins stable.
+        branch-epoch pins stable. on_model_complete fires after each model's
+        commit — wiring it to state persistence makes crashed runs resumable
+        (a retry skips what already finished).
         """
         manifest = RunManifest(
             run_id=uuid.uuid4().hex[:12],
@@ -153,6 +156,8 @@ class Runner:
             )
             manifest.results.append(result)
             ran_this_run.add(model_name)
+            if on_model_complete and result.ast_hash:
+                on_model_complete(model_name, result.ast_hash)
             io_warnings.extend(getattr(self.engine, "warnings", []))
             emit(
                 "model.end",

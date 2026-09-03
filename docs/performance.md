@@ -27,7 +27,7 @@ does, it's a config change, not a migration.
 ## Measured: full lifecycle on AWS (Glue + S3, us-east-1, laptop)
 
 1M-row input table, two models, disposable bucket. Reproduce with
-`examples/aws-glue/smoke.py --pass-1m` (creates and cleans up its own
+`python -m reble.aws_smoke --pass-1m` (creates and cleans up its own
 bucket + Glue database; asserts streaming reads engaged — the run fails if
 a read falls back to in-memory).
 

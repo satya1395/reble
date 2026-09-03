@@ -335,6 +335,14 @@ class Reble:
                 warnings=warnings,
             )
 
+        def record_model(model_name: str, ast_hash: str) -> None:
+            # Persist per-model progress as it commits: a crashed run leaves
+            # completed models recorded, so a retry resumes instead of
+            # re-running them (replace-never-append keeps even a full retry
+            # correct — this makes it cheap too).
+            st.model_hashes[model_name] = ast_hash
+            self.store.save(self.state)
+
         manifest = runner.run(
             data_branch,
             scope,
@@ -342,6 +350,7 @@ class Reble:
             {} if force else st.model_hashes,  # --force: rebuild the scope
             changeset_id=changeset_id,
             on_event=on_event,
+            on_model_complete=record_model,
         )
 
         # Record execution hashes, input pins, and scope-table base heads.

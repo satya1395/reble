@@ -121,3 +121,39 @@ def test_force_rebuilds_unchanged_models(project, seeded_catalog):
     # exactly one materialization's worth of rows — the forced rerun
     # replaced, it did not append (working-tree SQL is amount > 5: all 3)
     assert len(rows) == 3
+
+
+def test_crashed_run_resumes_without_rerunning_completed(project, seeded_catalog, monkeypatch):
+    """The Airflow-retry question, answered by test: a mid-run failure leaves
+    completed models recorded; the retry runs only what didn't finish."""
+    from reble.engine import DuckDbEngine
+
+    original = DuckDbEngine.execute_model
+
+    def fail_on_mart(self, model, *args, **kwargs):
+        if model.name == "mart_orders":
+            raise RuntimeError("simulated mid-run failure")
+        return original(self, model, *args, **kwargs)
+
+    monkeypatch.setattr(DuckDbEngine, "execute_model", fail_on_mart)
+    result = runner.invoke(app, ["run", "--models", "stg_orders,mart_orders,report_daily"])
+    assert result.exit_code == 1, result.stdout  # run failed at mart_orders
+
+    # stg_orders completed and its progress was persisted despite the crash
+    import json as _json
+
+    state = _json.loads((project / ".reble" / "state.json").read_text())
+    branch = next(iter(state["branches"].values()))
+    assert "stg_orders" in branch["model_hashes"]
+
+    # retry: stg skips (already done), mart + downstream run
+    monkeypatch.setattr(DuckDbEngine, "execute_model", original)
+    retried = _json.loads(
+        runner.invoke(app, ["--json", "run", "--models", "stg_orders,mart_orders,report_daily"]).stdout
+    )
+    statuses = {r["model"]: r["status"] for r in retried["data"]["results"]}
+    assert statuses == {
+        "stg_orders": "skipped",
+        "mart_orders": "ran",
+        "report_daily": "ran",
+    }

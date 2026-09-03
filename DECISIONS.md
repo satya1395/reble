@@ -248,8 +248,8 @@ keys, SSO) and applied to duckdb — one credential source, no secret
 duplication in reble.yml, values never logged. Precedence: manual settings
 → boto3-resolved → duckdb's `LOAD aws` chain → silent skip (local setups).
 
-Real-AWS verification replaces a MinIO simulation: `examples/aws-glue/
-smoke.py` runs the entire lifecycle on a disposable bucket + Glue database
+Real-AWS verification replaces a MinIO simulation: the packaged smoke
+(`python -m reble.aws_smoke`) runs the entire lifecycle on a disposable bucket + Glue database
 (teardown default) and **fails if any iceberg_scan read falls back to
 in-memory** — the streaming claim is asserted, not assumed. Measured on
 real S3 (1M rows, us-east-1, laptop): scoped run ~13s, refresh ~13s, keyed

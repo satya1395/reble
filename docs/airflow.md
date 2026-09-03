@@ -1,18 +1,42 @@
 # Airflow
 
-Reble is to Airflow what dbt-core is to Airflow: the transformation step
-the scheduler runs. Airflow owns *when* (schedules, retries, cross-system
-dependencies); Reble owns *what and how* (scope, order, isolation, diffs,
-promotion). You already know the shape — it's the dbt + Airflow pairing,
-minus the dbt.
+Keep your Airflow. Reble doesn't replace it, wrap it, or sit beside it —
+it's the **one command your refresh DAG runs**. Airflow decides *when*
+(schedules, retries, alerts); `reble run --refresh` does the refresh:
+derives what changed, rebuilds exactly that, in dependency order, into
+your Iceberg tables.
 
-The integration surface is deliberately boring: **one CLI verb per task,
-exit codes as the contract.** No custom operators required — though a
-provider package is on the roadmap (below).
+If you currently have a task per SQL query, those tasks collapse into
+one — the dependency wiring between them stops being something you
+maintain, because Reble reads it out of the SQL.
 
-## Pattern 1: nightly refresh
+## What happens when the task fails mid-run?
 
-The whole warehouse, as one task, scoped by data movement:
+The fear is reasonable: twenty models' worth of tasks collapsed into one
+command — so when it fails at model 7, does the retry duplicate data or
+re-run everything? Neither:
+
+- **No duplicate data, ever.** Every model materializes as
+  replace-never-append, and each table's commit is atomic. A model is
+  either fully at its old state or fully at its new one; there is no
+  partial write, and there is no append path to double.
+- **The retry resumes, not restarts.** Progress is recorded as each model
+  commits — a crashed run leaves completed models marked done, so the
+  retry executes only what didn't finish. (For `--refresh` this falls out
+  of snapshot timestamps: finished models are no longer stale.)
+- **Fail-fast.** The run stops at the first failing model; downstream
+  models never run against half-built inputs.
+
+So Airflow's retry box just works: `retries=2` on the task, and the
+second attempt picks up where the first died.
+
+## The nightly refresh
+
+The whole warehouse, one task:
+
+```python
+from airflow.providers.cncf.kubernetes.operators.pod import PodOperator  # or BashOperator
+```
 
 ```python
 from airflow.decorators import dag, task
@@ -29,32 +53,57 @@ def reble_nightly():
 reble_nightly()
 ```
 
-`--refresh` is idempotent: trigger it manually, trigger it twice, trigger
-it from the ingestion pipeline's `TriggerDagRun` — a night with no new data
-is one catalog listing and a green task.
+`--refresh` scopes by data movement, so backfills and manual triggers are
+safe: a night with no new data is one catalog listing and a green task;
+trigger it twice, nothing doubles.
 
-## Pattern 2: refresh on ingest
+## Refresh the moment data lands
 
-Event-driven, from the DAG that lands your data:
+Make **the last task of your ingestion DAG** the refresh. Lineage — read
+from the SQL itself — knows which sources drive which models, so the
+refresh rebuilds exactly the chain the ingest touched, and nothing else:
 
-```python
-@task
-def trigger_reble():
-    from airflow.providers.http.hooks.http import HttpHook  # or cosmos-style
-    # simplest robust form: call the reble refresh DAG when ingest succeeds
-    ...
+```mermaid
+flowchart LR
+    ING["your ingestion DAG<br/>lands raw_events"] --> REF{{"reble run --refresh<br/>(last task)"}}
+    subgraph lineage ["lineage — read from the SQL, nothing configured"]
+        direction TB
+        RAW[("raw_events<br/>just landed")]
+        STG["stg_orders"]
+        MART["mart_orders"]
+        CUST[("raw_customers<br/>quiet")]
+        DIM["dim_customers"]
+        SEG["customer_segments"]
+        RAW --> STG --> MART
+        CUST --> DIM --> SEG
+    end
+    REF -->|"snapshot moved → stale"| STG
+    REF -->|"nothing moved → untouched"| DIM
+    classDef rebuilt fill:#17805e,color:#fff
+    classDef untouched fill:#9e9e9e,color:#fff
+    class STG,MART rebuilt
+    class DIM,SEG,CUST untouched
 ```
 
-Or skip Airflow-to-Airflow plumbing entirely: make the **last task of your
-ingestion DAG** `reble run --refresh` — the refresh scopes to exactly the
-snapshots that ingest created.
-
-## Pattern 3: task per model
-
-Fine-grained DAGs where Airflow sees the model graph. Two ways:
+No sensors polling for "is the data there yet", no per-source task wiring:
+the moment `raw_events` lands a new snapshot, `stg_orders` is stale by
+timestamp — and its downstream closure joins it. `raw_customers`' chain
+didn't move, so it isn't read, isn't rebuilt, isn't billed:
 
 ```python
-# static: you name the tasks, Airflow orders them
+ingest >> BashOperator(
+    task_id="refresh",
+    bash_command="cd /srv/warehouse && reble run --refresh",
+)
+```
+
+## Task per model — only if you want Airflow's per-task machinery
+
+Reble already executes models in dependency order within a run, so you
+don't need a task per model for correctness. Split when you want Airflow's
+per-task retries, SLAs, or observability:
+
+```python
 build_stg = BashOperator(task_id="stg_orders",
                          bash_command="reble run --models stg_orders")
 build_mart = BashOperator(task_id="mart_orders",
@@ -62,50 +111,58 @@ build_mart = BashOperator(task_id="mart_orders",
 build_stg >> build_mart
 ```
 
-```python
-# generated: derive the task list from Reble's own lineage
-import json, subprocess
+## Promotion: deploy data changes the way you deploy code
 
-def model_tasks():
-    listing = json.loads(subprocess.check_output(
-        ["reble", "--json", "branch", "list"]))
-    # each entry's `scope` is ordered parents-before-children already
-    ...
-```
-
-(Reble executes models topologically *within* a run — task-per-model is
-for when you want Airflow's per-task retries, SLAs, or observability, not
-because ordering needs it.)
-
-## Pattern 4: promotion as a gated task
+You already run this pipeline for code — build, checks, deploy. With
+Reble, the artifact being deployed is **table states**: the data branch
+you built is the release candidate, and `reble promote` is the deploy
+button. Because it's a task, you can gate it with anything Airflow gives
+you:
 
 ```python
-promote = BashOperator(
-    task_id="promote",
-    bash_command="reble promote --ff-only",  # refuse under drift, never merge
-)
-checks >> promote   # checks: tests, reble status (exit 3 on drift), reble diff
+build = BashOperator(task_id="build",
+                     bash_command="reble run")            # branch = release candidate
+checks = BashOperator(task_id="checks",
+                      bash_command="reble status && reble diff")
+gate = ...    # any approval step Airflow supports — pause, external
+              # sign-off, a stakeholder check; or nothing, for full auto
+promote = BashOperator(task_id="promote",
+                       bash_command="reble promote --ff-only")
+
+build >> checks >> gate >> promote
 ```
 
-Exit codes are the contract (SPEC §8): `0` success, `3` drift detected,
-`4` promote blocked, `6` lineage unresolved. Airflow's retry/on-failure
-semantics map onto them directly — and because a blocked promote *records*
-re-entrant state, a retried task resumes rather than double-applies.
+Three properties make promote safe as an automated step:
+
+- **It refuses instead of merging.** `--ff-only` exits `4` if production
+  moved under the branch. That refusal is the feature — the branch
+  re-runs on fresh inputs and re-reviews, rather than resolving conflicts
+  at deploy time. There is no merge path to misconfigure.
+- **It applies atomically, table by table, and resumes.** Each table's
+  fast-forward is atomic; an interrupted promote records per-table
+  progress, so a retried task picks up where it died — never
+  double-applies.
+- **Exit codes are a contract.** `0` success, `3` drift, `4` blocked,
+  `6` lineage unresolved — Airflow's trigger rules and short-circuit
+  operators branch on them directly.
+
+And the review artifact is the thing reviewers actually want: the gate's
+`reble diff` shows the exact rows the change adds, removes, and modifies
+— not a wall of SQL.
 
 ## Setup notes
 
 - Install Reble on workers or in the image: `pip install reble`
-  (+ `reble[mcp]` if agents share the environment).
-- `REBLE_CHANGE_SET` pins a DAG's work to its own key (e.g.
-  `{{ dag.dag_id }}`), so scheduled runs, backfills, and manual triggers
-  never collide.
-- Credentials are the usual ones: your catalog (Glue/Polaris/Nessie/REST)
-  and object storage, via Airflow connections or env vars.
+  (or `reble[aws]` on Glue + S3).
+- `REBLE_CHANGE_SET` gives each DAG its own key (e.g. `{{ dag.dag_id }}`),
+  so scheduled runs, backfills, and manual triggers never collide.
+- Credentials are the usual ones — your catalog and storage, via Airflow
+  connections or env vars.
 
-## Roadmap: provider package
+## Later: a provider package
 
-A dedicated `apache-airflow-providers-reble` (operators with structured
-exit-code handling, a deferrable run operator streaming `--events` for
-progress, a sensor that waits for drift to clear) is planned once there's
-user pull. Until then the BashOperator patterns above are first-class, not
-a workaround — Reble's verbs were designed for exactly this.
+A dedicated Airflow provider (operators with structured exit-code
+handling, a deferrable run operator streaming `--events` for live
+progress, a drift sensor) is planned once there's user pull. Until then
+the plain-operator patterns above are the intended interface — the verbs
+were designed for exactly this.

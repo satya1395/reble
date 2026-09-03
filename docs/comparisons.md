@@ -25,8 +25,12 @@ versioning — a good one, and a thing you run (plus a database for it). Its
 branching is catalog-wide and its merges are real three-way merges across
 tables. Reble is not a catalog: it runs against whatever catalog you already
 have and adds the *workflow* — scope inference from SQL, tag-pinned inputs,
-row diffs, fast-forward-or-rerun promotion. If you already run Nessie,
-Reble can use it as a catalog like any other.
+row diffs, fast-forward-or-rerun promotion. The consistency models differ
+where it matters: Nessie asks you to trust a three-way merge across tables;
+Reble commits **atomically per table** (no partial states, interrupted work
+resumes) and *proves* cross-table consistency at promote time — the
+fast-forward is legal only when every pinned input still equals production.
+If you already run Nessie, Reble can use it as a catalog like any other.
 
 **Pick Nessie if** you want a versioned catalog as infrastructure and are
 taking on its operation. **Pick Reble if** you want branches without

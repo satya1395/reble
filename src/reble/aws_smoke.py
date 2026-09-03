@@ -17,21 +17,64 @@ reads fails the smoke.
 from __future__ import annotations
 
 import argparse
+import random
 import shutil
-import sys
 import tempfile
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-
-import numpy as np
 import pyarrow as pa
 
 from reble.core import Reble
 from reble.errors import RebleError
 
 NAMESPACE = "reble_smoke"
+
+SMOKE_POLICY = {
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "IdentifyAccount",
+            "Effect": "Allow",
+            "Action": "sts:GetCallerIdentity",
+            "Resource": "*",
+        },
+        {
+            "Sid": "SmokeBucket",
+            "Effect": "Allow",
+            "Action": [
+                "s3:CreateBucket",
+                "s3:DeleteBucket",
+                "s3:ListBucket",
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject",
+                "s3:ListBucketMultipartUploads",
+                "s3:AbortMultipartUpload",
+            ],
+            "Resource": [
+                "arn:aws:s3:::reble-smoke-*",
+                "arn:aws:s3:::reble-smoke-*/*",
+            ],
+        },
+        {
+            "Sid": "SmokeGlue",
+            "Effect": "Allow",
+            "Action": [
+                "glue:CreateDatabase",
+                "glue:GetDatabase",
+                "glue:GetDatabases",
+                "glue:DeleteDatabase",
+                "glue:CreateTable",
+                "glue:GetTable",
+                "glue:GetTables",
+                "glue:UpdateTable",
+                "glue:DeleteTable",
+            ],
+            "Resource": "*",
+        },
+    ],
+}
 FALLBACK_MARK = "fell back to in-memory read"
 all_warnings: list[str] = []
 
@@ -126,12 +169,12 @@ lineage:
 
 
 def seed_rows(rows: int, start_id: int = 0) -> pa.Table:
-    rng = np.random.default_rng(7)
-    n = rows
+    rng = random.Random(7)
     return pa.table(
         {
-            "id": np.arange(start_id, start_id + n, dtype=np.int64),
-            "amount": rng.uniform(0, 100, n),
+            "id": pa.array(range(start_id, start_id + rows), type=pa.int64()),
+            "amount": pa.array([rng.uniform(0, 100) for _ in range(rows)],
+                               type=pa.float64()),
         }
     )
 
@@ -258,7 +301,15 @@ def main() -> None:
     parser.add_argument("--pass-1m", action="store_true")
     parser.add_argument("--keep", action="store_true", help="skip teardown")
     parser.add_argument("--profile", help="AWS profile name (else AWS_PROFILE/env)")
+    parser.add_argument("--show-policy", action="store_true",
+                        help="print the least-privilege IAM policy for this smoke and exit")
     args = parser.parse_args()
+
+    if args.show_policy:
+        import json
+
+        print(json.dumps(SMOKE_POLICY, indent=2))
+        return
 
     if args.profile:
         import os
