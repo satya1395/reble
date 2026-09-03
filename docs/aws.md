@@ -18,9 +18,9 @@ python3.13 -m venv reble-test && source reble-test/bin/activate
 ### 2. Install Reble (the right version)
 
 ```bash
-pip install 'reble[aws]==0.5.0'
+pip install 'reble[aws]==0.5.1'
 reble --version    # must say 0.5.0 — if it says 0.1.1, force-reinstall:
-# pip install --force-reinstall 'reble[aws]==0.5.0'
+# pip install --force-reinstall 'reble[aws]==0.5.1'
 ```
 
 ### 3. An AWS profile that works
@@ -115,7 +115,7 @@ from pyiceberg.catalog import load_catalog
 
 cfg = yaml.safe_load(open("reble.yml"))
 cat_cfg = dict(cfg["warehouse"]["catalog"])
-# pyiceberg reads glue.region, not region (fixed in 0.5.1)
+# reble translates 'region' to 'glue.region' for pyiceberg (0.5.1+)
 if "region" in cat_cfg:
     cat_cfg["glue.region"] = cat_cfg.pop("region")
 
@@ -230,10 +230,10 @@ landed. The full pattern book is in the [Airflow guide](airflow.md).
 ## Troubleshooting
 
 - **`reble --version` says 0.1.1** — old cached package. Force-reinstall:
-  `pip install --force-reinstall 'reble[aws]==0.5.0'`
-- **`You must specify a region`** — set `export AWS_DEFAULT_REGION=us-east-1`
-  (the `region` key in reble.yml is fixed in 0.5.1; until then, the env
-  var is the reliable path)
+  `pip install --force-reinstall 'reble[aws]==0.5.1'`
+- **`You must specify a region`** — set `export AWS_DEFAULT_REGION=us-east-1`,
+  or put `region` under the catalog in `reble.yml` (translated to
+  `glue.region` automatically since 0.5.1)
 - **`Unable to locate credentials`** — `export AWS_PROFILE=orchestra` and
   verify with `aws sts get-caller-identity`
 - **`ACCESS_DENIED` on S3** — the bucket policy doesn't allow your IAM

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.1
+
+- **Fix: `region` in reble.yml now works for Glue catalogs.** pyiceberg
+  expects `glue.region`; a plain `region` key was silently ignored and runs
+  failed with a region-lookup error. Reble now translates the key, so the
+  documented config works as written.
+- AWS tutorial rewritten from zero: Python version prerequisites, install
+  version-checking (`reble[aws]==0.5.1`), bucket setup, seed script, full
+  walkthrough, and troubleshooting for every failure mode hit in real
+  testing.
+
+## 0.5.0
+
+- **State lives in SQL, not a JSON file.** SQLite locally (default,
+  `.reble/state.db`), Postgres for shared/CI state (`state.backend:
+  postgres`). Config is validated before any run; legacy `state.json` is
+  migrated automatically.
+- **MCP server** (`reble mcp`): 9 tools covering the full verb surface,
+  agent change-set protocol, structured error codes.
+- AWS smoke test packaged (`python -m reble.aws_smoke`) — full lifecycle on
+  disposable Glue+S3 resources, asserts zero `iceberg_scan` fallbacks,
+  `--show-policy` prints the IAM policy.
+
 ## 0.4.0
 
 - **Runs on AWS**: Glue catalog + S3 warehouse, verified end-to-end by a
