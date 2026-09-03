@@ -64,8 +64,9 @@ def _state_to_json(bs: BranchState) -> str:
     return json.dumps(asdict(bs), default=str)
 
 
-def _json_to_state(changeset: str, payload: str) -> BranchState:
-    raw = json.loads(payload)
+def _json_to_state(changeset: str, payload) -> BranchState:
+    # Postgres JSONB returns a dict (already parsed); SQLite TEXT returns str
+    raw = payload if isinstance(payload, dict) else json.loads(payload)
     pins = {t: Pin(**p) for t, p in (raw.pop("pins", {}) or {}).items()}
     return BranchState(pins=pins, **raw)
 
@@ -254,7 +255,7 @@ class StateStore:
             ).fetchone()
         if row is None:
             return None
-        return json.loads(row[0])
+        return row[0] if isinstance(row[0], dict) else json.loads(row[0])
 
     def save_promote_record(self, record: dict) -> None:
         from sqlalchemy import text
@@ -313,7 +314,7 @@ class StateStore:
             ).fetchone()
         if row is None:
             return {}
-        manifest = json.loads(row[0])
+        manifest = row[0] if isinstance(row[0], dict) else json.loads(row[0])
         return {
             r["model"]: r["ast_hash"]
             for r in manifest.get("results", [])
