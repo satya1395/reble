@@ -80,7 +80,8 @@ REST-compliant catalog). It is *not* a catalog and requires no new
 infrastructure. A branch ref is metadata-only: zero bytes are copied.
 
 - **Scoped branching** — scope = edited models ∪ downstream closure, capped
-  by `--depth`.
+  by `--depth`; `reble run --refresh` scopes by *data* movement instead
+  (nightly refreshes rebuild exactly what ingested).
 - **Pinned inputs** — upstream tables pinned with Iceberg **tags**
   (`reble_pin__*`) at run time; tags block `expire_snapshots`, so branch
   reads stay correct even while main moves.

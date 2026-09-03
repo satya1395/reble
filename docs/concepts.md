@@ -72,6 +72,41 @@ A model may skip a run only when *both* its SQL is unchanged *and* none of
 its in-scope parents executed. Unchanged SQL over changed inputs is a
 changed table.
 
+## Refreshes: order, scope, and scheduling without an orchestrator
+
+"No orchestrator required" is three concrete claims:
+
+**Order comes from lineage.** Every `reble run` executes models
+topologically — parents strictly before children — from the same SQLGlot
+graph that scopes branches. You never declare order, and you can't get it
+wrong.
+
+**Scope comes from movement.** Two kinds:
+
+- *SQL changed* (the branch case): scope is inferred — edited models plus
+  their downstream closure.
+- *Data changed* (the nightly case): `reble run --refresh` scopes to
+  exactly the models whose upstream snapshots moved since the model last
+  built — an input ingested overnight makes its models stale, and the
+  downstream closure joins them. On a quiet night it's an empty scope that
+  costs one catalog listing. `--refresh` and `--models` are mutually
+  exclusive; `reble estimate --refresh` previews the same scope.
+
+The first-ever build declares itself (`--models all` or a list), because a
+fresh project has no run history to infer from.
+
+**Scheduling is deliberately yours.** Cron, GitHub Actions, Airflow — they
+all just invoke one idempotent verb. The *run* is the unit; *when* is not
+Reble's layer. A nightly line in crontab is a complete orchestration setup:
+
+```bash
+# nightly refresh: rebuild exactly what moved
+0 3 * * * cd /srv/warehouse && reble run --refresh && reble gc
+```
+
+One honest footnote: `incremental` models currently full-refresh everywhere
+(streaming bounds memory, not recompute) until the Spark runner exists.
+
 ## Pinning: why branches are deterministic
 
 When you run on a branch, every **upstream input** (a table that isn't a

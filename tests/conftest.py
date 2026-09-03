@@ -78,14 +78,7 @@ def project(tmp_path, monkeypatch):
     for name, sql in MODELS.items():
         if name != "stg_orders.sql":
             (tmp_path / "models" / name).write_text(sql)
-    (tmp_path / ".gitignore").write_text("")
-    _git_ok(tmp_path, "init", "-b", "main")
-    _git_ok(tmp_path, "add", "-A")
-    _git_ok(tmp_path, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
-    _git_ok(tmp_path, "checkout", "-qb", "fix-orders")
-    (tmp_path / "models" / "stg_orders.sql").write_text(
-        "-- kind: table\nselect * from raw_events where amount > 5\n"
-    )
+    (tmp_path / ".gitignore").write_text(".reble/\ncatalog.db\nwarehouse/\n")
     (tmp_path / "reble.yml").write_text(
         f"""
 version: 1
@@ -100,6 +93,13 @@ lineage:
   models_path: models
   dialect: duckdb
 """
+    )
+    _git_ok(tmp_path, "init", "-b", "main")
+    _git_ok(tmp_path, "add", "-A")
+    _git_ok(tmp_path, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
+    _git_ok(tmp_path, "checkout", "-qb", "fix-orders")
+    (tmp_path / "models" / "stg_orders.sql").write_text(
+        "-- kind: table\nselect * from raw_events where amount > 5\n"
     )
     (tmp_path / "warehouse").mkdir(exist_ok=True)
     return tmp_path

@@ -208,10 +208,34 @@ identically regardless of which metadata file enumerates it. Writes stay in
 pyiceberg (branch refs + provenance snapshot-properties; duckdb-iceberg
 writes would drop both).
 
+Implementation note: the scan location must be inlined as a string literal
+— `iceberg_scan(?)` as a prepared parameter cannot be prepared inside
+`CREATE VIEW` (binder error; the first release silently fell back to arrow
+because of this, caught by re-running the benchmark).
+
 Measured (benchmarks/duckdb_scale.py, M-series laptop, sqlite+file
-warehouse): branch create on a 5M-row table is metadata-only (<10 ms);
-scoped run and keyed diff of two 2-model scope over 5M input rows complete
-in ~0.7-0.9 s per pass in **both** read modes with **identical diff
-results** — the lazy path's value is memory bounding (streams + spills
-instead of whole-snapshot materialization, honoring `memory_limit`), not
-wall time at laptop scale.
+warehouse, lazy path verified engaged): branch create on a 5M-row table is
+metadata-only (<10 ms); scoped run and keyed diff over 5M input rows
+complete in ~0.7-0.9 s per pass in **both** read modes with **identical
+diff results** — the lazy path's value is memory bounding (streams +
+spills instead of whole-snapshot materialization, honoring `memory_limit`),
+not wall time at laptop scale.
+
+## 20. Refresh scope is data-driven; the default base is never disambiguated
+
+`reble run --refresh` scopes to models whose upstream snapshots (input
+tables and model dependencies, by main snapshot wall-clock timestamp) are
+strictly newer than the model's own main snapshot, closed downward via the
+same closure as edit-driven scope. No new recorded state: snapshot
+timestamps are the signal. `--refresh` + `--models` is exit 2.
+
+Corollary fix: the default base name is never name-disambiguated — running
+on main (changeset "main") targets main itself, not a suffixed branch, or
+nightly refreshes would never land on main.
+
+## 21. Scheduling is not a layer
+
+Order comes from lineage, scope from movement (SQL or data), and *when*
+from cron/CI — the run is the unit. A scheduler inside Reble is refused for
+the same reason merges are: it adds coordination surface without adding
+correctness.

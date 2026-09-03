@@ -31,6 +31,7 @@ execute.
 ```bash
 reble run                        # scope inferred from your edits
 reble run --models stg,mart      # explicit scope
+reble run --refresh              # data-driven scope: upstream snapshots moved
 reble run --depth 2              # cap the downstream cascade
 reble run --dry-run              # preflight only, writes nothing
 ```
@@ -117,6 +118,7 @@ nothing scanned.
 ```bash
 reble estimate                  # scope inferred from your edits
 reble estimate --models stg     # explicit scope
+reble estimate --refresh        # data-driven scope preview
 ```
 
 Models to run, per-table rows/bytes for scope tables and pinned inputs,

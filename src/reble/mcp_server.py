@@ -75,6 +75,7 @@ def reble_run(
     dry_run: bool = False,
     change_set: str | None = None,
     branch: str | None = None,
+    refresh: bool = False,
 ) -> dict:
     """Materialize a scoped change on an isolated Iceberg branch.
 
@@ -83,8 +84,11 @@ def reble_run(
     models are skipped. If change_set is omitted, one is generated and
     returned as `changeset` — pass it to reble_status/reble_diff/reble_promote.
     On a fresh change-set with no prior run, pass `models` explicitly (fresh
-    branches start with empty scope). Set dry_run=True to preview scope,
-    pins, and full-refreshs without writing.
+    branches start with empty scope). Set refresh=True for a data-driven
+    scope: rebuild exactly the models whose upstream snapshots moved since
+    they last built (the nightly-refresh mode; mutually exclusive with
+    models). Set dry_run=True to preview scope, pins, and full-refreshs
+    without writing.
     """
     core = _core()
     generated = None
@@ -97,6 +101,7 @@ def reble_run(
             dry_run=dry_run,
             change_set=change_set or generated,
             branch=branch,
+            refresh=refresh,
         )
     except RebleError as exc:
         return _error(exc)

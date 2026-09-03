@@ -166,6 +166,7 @@ def init(
 
     detected: dict[str, str] = {}
     assumptions: list[str] = []
+    machine_local: list[str] = []
     models_dir = root / "models"
     if models_dir.is_dir():
         count = len(list(models_dir.rglob("*.sql")))
@@ -205,6 +206,7 @@ def init(
             }
         )
         (root / "warehouse").mkdir(exist_ok=True)
+        machine_local += ["catalog.db", "warehouse/"]
         assumptions.append("sql catalog: local sqlite + ./warehouse (dev defaults)")
     elif catalog_type == "in-memory":
         raw["warehouse"]["catalog"].update({"warehouse": f"file://{root / 'warehouse'}"})
@@ -215,12 +217,15 @@ def init(
     assert_no_secrets(raw)
     loader.config_path.write_text(_dump_yaml(raw))
 
-    # .reble/ is machine-local (spec section 2); init adds the gitignore entry
+    # .reble/ is machine-local (spec section 2); init adds the gitignore
+    # entries (plus sql-catalog artifacts when we generate them)
     loader.reble_dir.mkdir(exist_ok=True)
     gitignore = root / ".gitignore"
     lines = gitignore.read_text().splitlines() if gitignore.exists() else []
-    if ".reble/" not in lines:
-        gitignore.write_text("\n".join([*lines, ".reble/", ""]) if lines else ".reble/\n")
+    for entry in [".reble/", *machine_local]:
+        if entry not in lines:
+            lines.append(entry)
+    gitignore.write_text("\n".join([*lines, ""]) if lines else "")
 
     # Probe catalog connectivity through the config we just wrote — also
     # validates it. Exit 2 if unreachable (spec section 4).
@@ -266,6 +271,9 @@ def run(
     branch: str | None = typer.Option(
         None, "--branch", help="Explicit data branch (resume an existing branch under this change-set)"
     ),
+    refresh: bool = typer.Option(
+        False, "--refresh", help="Data-driven scope: rebuild models whose upstream snapshots moved"
+    ),
     events: bool = typer.Option(
         False, "--events", help="Stream NDJSON run events on stdout (implies machine mode)"
     ),
@@ -288,6 +296,7 @@ def run(
         engine=engine_name,
         change_set=change_set,
         branch=branch,
+        refresh=refresh,
         on_event=ndjson_emitter("run") if events else None,
     )
     if _show_text(json_output, quiet):
@@ -360,6 +369,9 @@ def diff_cmd(
 def estimate(
     models: str | None = typer.Option(None, "--models", help="Comma-separated model names"),
     depth: int | None = typer.Option(None, "--depth", help="Cap downstream cascade"),
+    refresh: bool = typer.Option(
+        False, "--refresh", help="Data-driven scope: models whose upstream snapshots moved"
+    ),
     change_set: str | None = typer.Option(None, "--change-set", help="Change-set id"),
     branch: str | None = typer.Option(None, "--branch", help="Explicit data branch"),
     profile: str | None = typer.Option(None, "--profile"),
@@ -380,6 +392,7 @@ def estimate(
         depth=depth,
         change_set=change_set,
         branch=branch,
+        refresh=refresh,
     )
     if _show_text(json_output, quiet) and "tables" in env["data"]:
         data = env["data"]

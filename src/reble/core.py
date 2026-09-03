@@ -34,7 +34,7 @@ from .gitinfo import base_commit, current_branch, file_at, head_commit, repo_roo
 from .lineage import Graph, ast_hash, build_graph
 from .naming import disambiguate, sanitize_branch_name
 from .promote import Promoter, orphan_pin_tags
-from .relations import relation_id, table_for_model, tag_name
+from .relations import data_stale_models, relation_id, table_for_model, tag_name
 from .runner import Runner
 from .scope import compute_scope
 from .state import BranchState, Pin, StateStore
@@ -165,6 +165,13 @@ class Reble:
         if st is not None:
             return st.data_branch
         sanitized = sanitize_branch_name(changeset_id, self.cfg.branching.name_sanitization)
+        # The default base is not a name collision — it IS the base. Running
+        # on main (the nightly-refresh case) must target main itself, not a
+        # suffixed branch.
+        if sanitized == sanitize_branch_name(
+            self.cfg.warehouse.default_base, self.cfg.branching.name_sanitization
+        ):
+            return sanitized
         return disambiguate(sanitized, self._existing_refs())
 
     def _existing_refs(self) -> set[str]:
@@ -256,6 +263,7 @@ class Reble:
         engine: str | None = None,
         change_set: str | None = None,
         branch: str | None = None,
+        refresh: bool = False,
         on_event: EventCallback | None = None,
     ) -> dict:
         """Resolve scope, create/update the data branch, pin inputs, execute."""
@@ -267,11 +275,17 @@ class Reble:
         graph = self.graph()
 
         st = self.state.branches.get(changeset_id) or self._state_by_branch(data_branch)
+        if refresh and models:
+            raise RebleError("--refresh and --models are mutually exclusive", exit_code=2)
         edited, _ = self.edited_models(graph, st, data_branch)
         if models:
             if isinstance(models, str):
                 models = [m.strip() for m in models.split(",") if m.strip()]
             edited = list(models)
+        elif refresh:
+            # data-driven scope: models whose upstream snapshots moved,
+            # closed downward exactly like an edit-driven scope
+            edited = data_stale_models(self.cfg, self.catalog, graph)
 
         scope = compute_scope(graph, edited, depth=depth)
 
@@ -457,6 +471,7 @@ class Reble:
         depth: int | None = None,
         change_set: str | None = None,
         branch: str | None = None,
+        refresh: bool = False,
     ) -> dict:
         """Rough, local cost estimate from Iceberg metadata only.
 
@@ -477,6 +492,8 @@ class Reble:
             if isinstance(models, str):
                 models = [m.strip() for m in models.split(",") if m.strip()]
             edited = list(models)
+        elif refresh:
+            edited = data_stale_models(self.cfg, self.catalog, graph)
         scope = compute_scope(graph, edited, depth=depth)
 
         if scope.is_empty:

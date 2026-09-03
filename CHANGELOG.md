@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.1
+
+- **`reble run --refresh`** — data-driven scope for nightly refreshes:
+  rebuilds exactly the models whose upstream snapshots moved, closed
+  downstream; `reble estimate --refresh` previews the same scope. Docs
+  gain a Refreshes section (order from lineage, scope from movement,
+  scheduling from cron).
+- Fixed: running on `main` no longer disambiguates to a suffixed branch —
+  nightly refreshes land on main.
+- Fixed: `iceberg_scan` locations are inlined as literals — prepared
+  parameters cannot be prepared inside `CREATE VIEW`, which had silently
+  disabled the streaming read path in 0.3.0.
+- `reble init` gitignores sql-catalog artifacts (catalog.db, warehouse/).
+
 ## 0.3.0
 
 - **DuckDB read path at scale**: run inputs and diffs stream through

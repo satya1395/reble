@@ -82,10 +82,12 @@ class DuckIo:
             location = _scan_location(table)
             if location:
                 try:
+                    # The location must be inlined, not a prepared parameter:
+                    # iceberg_scan cannot be prepared inside CREATE VIEW.
+                    literal = location.replace("'", "''")
                     con.execute(
-                        f'CREATE VIEW "{view}" AS SELECT * FROM iceberg_scan(?, '
-                        f"snapshot_from_id={int(snapshot_id)}, allow_moved_paths=true)",
-                        [location],
+                        f'CREATE VIEW "{view}" AS SELECT * FROM iceberg_scan(\'{literal}\', '
+                        f"snapshot_from_id={int(snapshot_id)}, allow_moved_paths=true)"
                     )
                     return "iceberg_scan"
                 except Exception as exc:  # noqa: BLE001 — fall back per table
