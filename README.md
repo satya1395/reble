@@ -24,6 +24,24 @@ refs that cost nothing to create.
 
 ![The Reble loop: build, edit on a branch, diff the rows, promote](docs/assets/demo.gif)
 
+## Why
+
+Every data team ends up building the same expensive hack: a copy of the
+warehouse for testing changes. You refresh it, you queue for it, you hope
+it still matches prod — and you pay for it twice.
+
+Iceberg already has the primitive that makes it unnecessary. A branch ref
+is metadata-only: a "copy" of a 5M-row table costs **10 ms and zero
+bytes**, on any compliant catalog. What's missing is the *workflow* around
+it — deciding what a change touches, making its inputs reproducible,
+showing what it will do to production rows before anyone accepts it.
+
+Reble is that workflow. When you change a model, it branches, re-runs only
+the blast radius, shows you the exact rows that will change, and
+fast-forwards production when you accept. There is no merge step, on
+purpose: promote or discard, never three-way-merge data — because data
+merges are where correctness goes to die.
+
 ## How it works
 
 ```mermaid
