@@ -1,5 +1,8 @@
 # Concepts
 
+One piece of vocabulary: a **model** is one SQL file that produces one
+table — nothing more. Everything below builds on that.
+
 ## The problem, more precisely
 
 Data teams can't safely try things. Four gaps compound:

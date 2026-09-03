@@ -47,6 +47,26 @@ That's the whole product. Start with a story you've lived —
 [Days you've had](scenarios.md) — or walk the loop end to end in
 [Getting started](getting-started.md).
 
+## Just SQL — no dbt required
+
+A **model** is just Reble's word for *one SQL file that produces one
+table*. Most teams already have these — a folder of query files and some
+way of running them in order. If that's you:
+
+- **Your SQL files are models as-is.** One file = one table; a three-line
+  comment header (`-- key: order_id`) is the only metadata, and even that
+  is optional.
+- **The dependencies you configure by hand** — in a DAG file, a UI, or a
+  config — **are parsed from the SQL itself.** A table reference to
+  another model is an edge; ordering and blast radius come from lineage,
+  not from clicking.
+- **Your scheduler stays your scheduler.** Airflow, cron, or the internal
+  webapp keeps deciding *when*; Reble takes over *what and how*: scoped
+  builds, isolated branches, row-level diffs, safe promotion.
+
+dbt users are welcome (your SQL ports almost unchanged), but nothing
+assumes dbt.
+
 ## Where it sits
 
 ```mermaid

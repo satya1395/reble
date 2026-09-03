@@ -83,9 +83,12 @@ any CI.
 
 ## Models are plain SQL
 
-No orchestrator required. `models/**/*.sql` — one file is one model, the file
-stem is the model name, and a minimal header comment block carries the
-semantics:
+**"Model" is just our word for one SQL file that creates one table.** If
+your team keeps a folder of SQLs and schedules them some way — a DAG, cron,
+an internal webapp — you already have models; point Reble at the folder.
+No orchestrator required, no dbt required: `models/**/*.sql`, one file is
+one model, the file stem is the table name, and a minimal header comment
+block carries the semantics:
 
 ```sql
 -- model: mart_orders      (optional; defaults to file name)

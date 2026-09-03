@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.2
+
+Docs release — no code changes.
+
+- **Where-Reble-sits diagram** (README + docs home): models → Reble →
+  compute → your catalog → your storage; schedulers and agents invoke
+  verbs. Positioning sharpened: a transformation engine (dbt-core shape),
+  not a scheduler — cron/Airflow decide when.
+- **Airflow guide**: nightly refresh, refresh-on-ingest, task-per-model,
+  gated promotion with exit-code semantics; provider package on the
+  roadmap, BashOperator patterns first-class today.
+- **CI-triggered refresh** workflow example in the README (scheduled +
+  `workflow_dispatch` from ingestion).
+- **Plain-SQL vocabulary for non-dbt teams**: "model" defined as *one SQL
+  file that produces one table* up front (README, docs home, getting
+  started, concepts), plus a mapping for teams that schedule SQLs via
+  DAGs or internal webapps — files are models as-is, dependencies parse
+  from the SQL, your scheduler stays.
+
 ## 0.3.1
 
 - **`reble run --refresh`** — data-driven scope for nightly refreshes:

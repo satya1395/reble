@@ -23,8 +23,8 @@ The example below lives in the repo as
 mkdir orders && cd orders && mkdir models
 ```
 
-Create three SQL files — one file is one model, the file name is the table
-name:
+Create three SQL files — a *model* is just Reble's word for one SQL file
+that produces one table, and the file name is the table name:
 
 ```sql title="models/stg_orders.sql"
 -- kind: table
