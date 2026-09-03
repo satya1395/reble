@@ -5,11 +5,14 @@ hide:
 
 # Reble
 
-**Git-style branches for your Iceberg warehouse.**
+**An open SQL engine for your Iceberg lakehouse.**
 
-Change a model, run it on an isolated zero-copy branch, review the exact rows
-that changed, then fast-forward production. No warehouse clones, no copies,
-no merges.
+Your models are plain SQL files; Reble derives their dependencies, builds
+the tables into your catalog and bucket, and refreshes exactly what moved —
+triggered by cron, CI, Airflow, or an agent. And the engine is
+branch-capable at the core: every change can run on an isolated zero-copy
+branch where you review the exact rows it changes, then fast-forward
+production. No warehouse server, no clones, no merges.
 
 !!! note "Status: early, but real"
 

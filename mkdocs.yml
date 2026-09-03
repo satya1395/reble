@@ -1,5 +1,5 @@
 site_name: Reble
-site_description: Git-style branches for your Iceberg warehouse — scoped branches, row-level diffs, fast-forward promotion.
+site_description: An open SQL engine for your Iceberg lakehouse — plain-SQL models, lineage, refresh, and git-style branches.
 site_url: https://satya1395.github.io/reble/
 site_author: Reble contributors
 

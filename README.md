@@ -4,16 +4,21 @@
 [![PyPI](https://img.shields.io/pypi/v/reble)](https://pypi.org/project/reble/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Git-style branches for your Iceberg warehouse.** Change a model, run it
-on an isolated zero-copy branch, review the exact rows that changed, then
-fast-forward production. No warehouse clones, no copies, no merges.
+**Reble is an open SQL engine for your Iceberg lakehouse.** Your models are
+plain SQL files; Reble derives their dependencies, builds the tables into
+your catalog and bucket, and refreshes exactly what moved — triggered by
+cron, CI, Airflow, or an agent. And the engine is branch-capable at the
+core: every change can run on an isolated zero-copy branch where you
+review the exact rows it changes, then fast-forward production. No
+warehouse server, no clones, no merges.
 
-You know this problem: to test a change to one model you either re-run your
-pipeline against a copy of the warehouse (slow, expensive, constantly out of
-date) or you cross your fingers on prod. Reble gives every change its own
-**branch of only the tables it touches** — your edited models plus their
-downstream closure — built on native Iceberg branch refs that cost nothing
-to create. Before anything reaches production, you see the row-level diff.
+Most teams assemble this from parts — a scheduler to run SQLs in order, a
+transformation tool to manage them, and, when a change needs testing, a
+copy of the warehouse. Reble is one open layer for the whole job, and the
+branching isn't bolted on: scope, pin, run, diff, promote are what the
+engine does. A branch contains only the change's blast radius — your
+edited models plus their downstream closure — as native Iceberg branch
+refs that cost nothing to create.
 
 ## How it works
 
