@@ -1,3 +1,3 @@
 """Reble: git-style branching for Iceberg data warehouses."""
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"

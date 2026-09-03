@@ -71,6 +71,8 @@ warehouse:
     # type-specific keys, e.g.:
     # polaris: { uri: ..., credential: ${POLARIS_TOKEN} }
     # rest:    { uri: ..., warehouse: ... }
+    # glue:    { region: us-east-1, warehouse: s3://bucket/prefix }
+    #          (credentials via the standard AWS chain; install reble[aws])
   default_base: main        # ref data branches fork from
   namespace: analytics      # optional Iceberg namespace for model tables
 lineage:

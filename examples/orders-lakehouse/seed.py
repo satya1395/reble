@@ -9,13 +9,13 @@ input your models read from. Safe to re-run only on a fresh catalog.
 """
 
 import pyarrow as pa
-from pyiceberg.catalog import load_catalog
-
 import yaml
+from pyiceberg.catalog import load_catalog
 
 
 def main() -> None:
-    cfg = yaml.safe_load(open("reble.yml"))
+    with open("reble.yml") as f:
+        cfg = yaml.safe_load(f)
     cat_cfg = cfg["warehouse"]["catalog"]
     catalog = load_catalog("reble", **cat_cfg)
     namespace = cfg["warehouse"]["namespace"]

@@ -188,7 +188,9 @@ under a new change-set.
 ## Requirements
 
 - Python 3.10+
-- An Iceberg catalog (Glue, Polaris, Nessie, Hive, or any REST-compliant one)
+- An Iceberg catalog (Glue, Polaris, Nessie, Hive, or any REST-compliant
+  one) — on AWS, `pip install 'reble[aws]'` and see the
+  [AWS quickstart](https://satya1395.github.io/reble/aws/)
 - SQL models under `models/` (path configurable via `lineage.models_path`)
 
 ## Status

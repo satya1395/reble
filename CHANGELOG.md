@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0
+
+- **Runs on AWS**: Glue catalog + S3 warehouse, verified end-to-end by a
+  self-cleaning smoke (`examples/aws-glue/smoke.py`) that asserts streaming
+  reads engage over S3 — measured 1M-row lifecycle on real S3 with zero
+  fallbacks. AWS quickstart in the docs.
+- `reble[aws]` extra (`pyiceberg[glue]`).
+- duckdb S3 credentials auto-configure from boto3's default chain
+  (AWS_PROFILE / env / SSO) when `engines.duckdb.settings` is unset;
+  manual settings take full responsibility. Values never logged.
+
 ## 0.3.2
 
 Docs release — no code changes.

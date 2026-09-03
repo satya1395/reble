@@ -239,3 +239,18 @@ Order comes from lineage, scope from movement (SQL or data), and *when*
 from cron/CI — the run is the unit. A scheduler inside Reble is refused for
 the same reason merges are: it adds coordination surface without adding
 correctness.
+
+## 22. S3 credentials auto-configure from boto3; the AWS smoke is the integration test
+
+When `engines.duckdb.settings` is unset, duckdb's s3 region + credentials
+are resolved once per process via boto3's default chain (AWS_PROFILE, env
+keys, SSO) and applied to duckdb — one credential source, no secret
+duplication in reble.yml, values never logged. Precedence: manual settings
+→ boto3-resolved → duckdb's `LOAD aws` chain → silent skip (local setups).
+
+Real-AWS verification replaces a MinIO simulation: `examples/aws-glue/
+smoke.py` runs the entire lifecycle on a disposable bucket + Glue database
+(teardown default) and **fails if any iceberg_scan read falls back to
+in-memory** — the streaming claim is asserted, not assumed. Measured on
+real S3 (1M rows, us-east-1, laptop): scoped run ~13s, refresh ~13s, keyed
+diff ~4s, drift ~2s, zero fallbacks.
