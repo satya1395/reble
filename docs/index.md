@@ -71,6 +71,8 @@ way of running them in order. If that's you:
 dbt users are welcome (your SQL ports almost unchanged), but nothing
 assumes dbt.
 
+![The Reble loop](assets/demo.gif)
+
 ## Where it sits
 
 ```mermaid
@@ -89,7 +91,9 @@ flowchart TB
 ```
 
 Reble owns the transformation layer (the shape dbt-core has); your
-scheduler owns *when*; your catalog and bucket stay yours.
+scheduler owns *when*; your catalog and bucket stay yours. State lives
+in SQLite locally or in [Postgres for shared teams](airflow.md#reble-in-production-airflow)
+— one config line.
 
 ## What makes it different
 

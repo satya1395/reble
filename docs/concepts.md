@@ -98,6 +98,12 @@ wrong.
 The first-ever build declares itself (`--models all` or a list), because a
 fresh project has no run history to infer from.
 
+**State is configurable.** Locally it's SQLite — zero-config, works
+everywhere. For teams sharing a warehouse from multiple workers (Airflow,
+CI), one line switches to Postgres: `state.store: postgres` with a URI
+in `reble.yml`. Concurrent workers on different change-sets never
+conflict.
+
 **Scheduling is deliberately yours.** Cron, GitHub Actions, Airflow — they
 all just invoke one idempotent verb ([Airflow guide](airflow.md) for DAG
 patterns). The *run* is the unit; *when* is not

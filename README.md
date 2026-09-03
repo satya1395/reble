@@ -22,6 +22,8 @@ engine does. A branch contains only the change's blast radius — your
 edited models plus their downstream closure — as native Iceberg branch
 refs that cost nothing to create.
 
+![The Reble loop: build, edit on a branch, diff the rows, promote](docs/assets/demo.gif)
+
 ## How it works
 
 ```mermaid
@@ -147,11 +149,31 @@ the canonical AST and never trigger a run. Every branch snapshot carries
 provenance (`reble.model`, `reble.ast_hash`, `reble.run_id`) in its summary —
 "which code produced this table state" is answered from the catalog itself.
 
-## Runs itself — no manual runs required
+## Set it up once, it runs itself
 
-State lives in SQLite locally (zero-config) or in Postgres for shared
-teams (`state.store: postgres` with a URI — one line in `reble.yml`,
-validated at startup, no PVC or shared filesystem needed).
+No manual runs. Put one command in cron, CI, or Airflow — the same
+command whether you have two models or two hundred:
+
+```bash
+# nightly: rebuild exactly what changed
+0 3 * * * cd /srv/warehouse && reble run --refresh && reble gc
+```
+
+Safe to trigger repeatedly: a night with no new data does nothing. A
+crashed run resumes from where it stopped. A retried promote never
+double-applies.
+
+For teams, state lives in Postgres so multiple workers share it safely
+(one line in `reble.yml`, validated at startup — no shared filesystem
+needed):
+
+```yaml
+state:
+  store: postgres
+  uri: ${REBLE_STATE_URI}   # postgresql://user:pass@host:5432/reble
+```
+
+Install with `pip install 'reble[postgres]'`.
 
 The verbs are idempotent and the exit codes are a contract, so any job can
 drive Reble: scheduled, or triggered by whatever lands your data. A double

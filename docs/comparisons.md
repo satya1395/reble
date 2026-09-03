@@ -50,13 +50,35 @@ Reble if** your tables are Iceberg in your bucket, or might be.
 
 ## Reble vs dbt
 
-dbt is an **orchestrator**: it compiles and runs your SQL. Reble is not an
-orchestrator — models are plain SQL files, executed by Reble's engine
-(DuckDB today, Spark behind the same interface) on branches. The products
-solve different problems and are not substitutes: dbt answers "how do I
-build my warehouse," Reble answers "how do I change it safely." There's no
-dbt dependency anywhere in Reble; a dbt project's SQL is a migration story
-("point Reble at your models directory"), not a requirement.
+You know dbt: your SQL lives in templates (`{{ ref('stg_orders') }}`),
+your configs in YAML, and `dbt build` compiles everything and runs it in
+order against your warehouse.
+
+Reble is the same job done differently. Your SQL stays plain — no Jinja,
+no YAML, no compile step. Reble reads the dependencies directly from the
+SQL, builds the tables on branches (zero-copy, isolated from
+production), and shows you the row-level diff before anything ships.
+When you're happy, one command promotes it. No staging warehouse, no
+clones, no merges.
+
+The biggest difference is what happens when you change something:
+
+- **dbt**: you edit the model, `dbt build` re-runs it against your
+  warehouse (or a staging copy), and you compare outputs by hand.
+- **Reble**: you edit the model, `reble run` rebuilds it on an isolated
+  branch, `reble diff` shows the exact rows that changed, and
+  `reble promote` applies it — or refuses if upstream data moved.
+
+Migration is simple: remove the `ref()` calls from your dbt models
+(Reble reads the table references from the SQL itself), strip the Jinja,
+keep the SQL. Your `models/` directory is already a Reble project.
+
+**Pick dbt if** you're deeply invested in the ecosystem (packages,
+macros, tests, docs site) and your team knows the workflow.
+
+**Pick Reble if** you want branching, row-level diffs, and safe
+promotion without the Jinja/YAML/compile stack — or if you never used
+dbt and just want your SQL to run safely.
 
 ## Why not a dbt extension?
 

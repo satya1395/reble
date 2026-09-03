@@ -19,7 +19,19 @@ reble init --catalog sql --namespace analytics
 ```
 
 `--catalog` `glue|polaris|nessie|hive|rest|reble|sql|in-memory` ·
-`--engine` `duckdb|spark` · `--namespace` · `--yes`
+`--engine` `duckdb|spark` · `--namespace` · `--state local|postgres` ·
+`--yes`
+
+For shared state (multiple workers, CI runners, Airflow):
+
+```yaml
+state:
+  store: postgres
+  uri: ${REBLE_STATE_URI}
+```
+
+Requires `pip install 'reble[postgres]'`; validated at startup (exit 2
+if unreachable).
 
 Exits `2` if the catalog is unreachable.
 
