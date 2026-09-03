@@ -134,6 +134,35 @@ def _print_preflight(preflight: dict, quiet: bool) -> None:
         typer.echo(f"{key:<18} {count:>3}   {shown}")
 
 
+def _print_diff(tables: list[dict], quiet: bool) -> None:
+    """Text-mode diff: one line per table, samples on request (--rows / --full
+    control samples in the core; this only renders them)."""
+    any_change = False
+    for t in tables:
+        added, removed, changed = t["added"], t["removed"], t["changed"]
+        schema = t.get("schema_delta") or {}
+        schema_bits = [
+            f"+{len(schema[k])} {k}"
+            for k in ("added", "removed", "changed")
+            if schema.get(k)
+        ]
+        schema_note = f"  schema: {', '.join(schema_bits)}" if schema_bits else ""
+        changed_note = "" if added or removed or changed else "  (no changes)"
+        any_change = any_change or bool(added or removed or changed or schema_bits)
+        typer.echo(
+            f"{t['table']}: +{added} -{removed} ~{changed} "
+            f"({t.get('unchanged', 0)} unchanged){changed_note}{schema_note}"
+        )
+        if t.get("warning"):
+            typer.secho(f"  WARN {t['warning']}", fg=typer.colors.YELLOW, err=True)
+        if not quiet:
+            for kind, label in (("added", "+"), ("removed", "-"), ("changed", "~")):
+                for row in (t.get("samples") or {}).get(kind, []):
+                    typer.echo(f"  {label} {row}")
+    if not any_change:
+        typer.echo("no changes — branch matches base")
+
+
 def _dump_yaml(data: dict) -> str:
     import yaml
 
@@ -357,7 +386,10 @@ def diff_cmd(
         branch=branch,
         on_event=ndjson_emitter("diff") if events else None,
     )
-    _emit(env, json_output)
+    if _as_json(json_output):
+        _emit(env, json_output)
+        return
+    _print_diff(env["data"]["tables"], quiet)
 
 
 # ------------------------------------------------------------------ estimate
