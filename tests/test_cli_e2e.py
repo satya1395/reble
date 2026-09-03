@@ -280,9 +280,11 @@ def test_estimate_empty_scope(project, seeded_catalog):
     assert json.loads(result.stdout)["data"]["status"] == "empty scope"
 
 
-def test_diff_text_default_is_counts_only(project, seeded_catalog):
-    """`reble diff` (no flags) prints row stats, no sample rows; `--rows`
-    opts into samples."""
+def test_diff_text_stats_and_saved_files(project, seeded_catalog):
+    """`reble diff` prints row stats only; sample rows are saved as per-table
+    JSON under .reble/diffs/<change-set>/, and --rows caps what is saved."""
+    import json
+
     from typer.testing import CliRunner
 
     from reble.cli import app
@@ -291,11 +293,16 @@ def test_diff_text_default_is_counts_only(project, seeded_catalog):
     result = CliRunner().invoke(app, ["diff", "mart_orders"])
     lines = [ln for ln in result.output.splitlines() if ln.strip()]
     assert any("analytics.mart_orders: +3" in ln for ln in lines)
-    assert not any(ln.lstrip().startswith(("+", "-", "~")) for ln in lines if "mart_orders" not in ln)
+    assert not any(ln.lstrip().startswith(("+ ", "- ", "~ ")) for ln in lines)
+    assert any(ln.startswith("detail: ") for ln in lines)
 
-    sampled = CliRunner().invoke(app, ["diff", "mart_orders", "--rows", "2"])
-    sample_lines = [
-        ln for ln in sampled.output.splitlines()
-        if ln.lstrip()[:2] in ("+ ", "- ", "~ ")
-    ]
-    assert 0 < len(sample_lines) <= 2 * 3  # ≤ N per category
+    diff_dir = project / ".reble" / "diffs" / "fix-orders"
+    saved = json.loads((diff_dir / "analytics.mart_orders.json").read_text())
+    assert saved["added"] == 3
+    assert saved["samples"]["added"]  # default cap saved the detail
+    summary = json.loads((diff_dir / "summary.json").read_text())
+    assert "analytics.mart_orders" in summary
+
+    CliRunner().invoke(app, ["diff", "mart_orders", "--rows", "2"])
+    saved = json.loads((diff_dir / "analytics.mart_orders.json").read_text())
+    assert len(saved["samples"]["added"]) == 2

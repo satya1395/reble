@@ -66,12 +66,17 @@ reble diff                       # whole scope
 reble diff mart_orders           # specific tables
 reble diff --against main        # advisory "what would promote do"
 reble diff --schema-only
+reble diff --rows 50             # save 50 sample rows per category
+reble diff --full                # save all changed rows
 ```
 
-Per table: `+added / -removed / ~changed` counts, key columns, sample rows,
-schema delta. Diff keys come from the model's `-- key:` header or
-`diff.keys` in config. Exits `7` when a table has no key and
-`on_missing_key: error`.
+The terminal shows one line per table: `+added / -removed / ~changed`
+counts and the schema delta. Sample rows are never dumped to the terminal —
+they are saved as JSON under `.reble/diffs/<change-set>/` (one file per
+table plus `summary.json`), refreshed on each diff. `--rows` caps how much
+detail is saved (default: `diff.max_rows_dumped`, 1000). Diff keys come
+from the model's `-- key:` header or `diff.keys` in config. Exits `7` when
+a table has no key and `on_missing_key: error`.
 
 ## reble status
 

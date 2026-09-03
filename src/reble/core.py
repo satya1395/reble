@@ -483,13 +483,45 @@ class Reble:
                     changed=d.changed_count,
                 )
 
+        diff_dir = self._save_diff(changeset_id, against, out)
+
         return envelope.envelope(
             "diff",
             ok=True,
-            data={"tables": out},
+            data={"tables": out, "diff_dir": str(diff_dir)},
             branch=branch_env(git_branch, data_branch, changeset_id),
             warnings=warnings,
         )
+
+    def _save_diff(self, changeset_id: str, against: str, tables: list[dict]) -> Path:
+        """Persist per-table diff JSON under .reble/diffs/<change-set>/.
+
+        Refreshed in place per change-set (and per --against), so a change-set
+        has exactly one current diff on disk — detail lives here, not in the
+        terminal. One file per table keeps folders navigable at 300 tables.
+        """
+        import json as _json
+        import re as _re
+
+        safe_cs = _re.sub(r"[^A-Za-z0-9._-]", "_", changeset_id)
+        folder = safe_cs if against == "base" else f"{safe_cs}__vs_{against}"
+        diff_dir = self.reble_dir / "diffs" / folder
+        diff_dir.mkdir(parents=True, exist_ok=True)
+        summary = {}
+        for t in tables:
+            name = _re.sub(r"[^A-Za-z0-9._-]", "_", t["table"])
+            path = diff_dir / f"{name}.json"
+            path.write_text(_json.dumps(t, indent=2, default=str))
+            summary[t["table"]] = {
+                "added": t["added"],
+                "removed": t["removed"],
+                "changed": t["changed"],
+                "file": path.name,
+            }
+        (diff_dir / "summary.json").write_text(
+            _json.dumps(summary, indent=2, default=str)
+        )
+        return diff_dir
 
     def estimate(
         self,
