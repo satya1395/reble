@@ -13,8 +13,9 @@ cron, CI, Airflow, or an agent.
 
 Every data team ends up building the same expensive hack around that job:
 a copy of the warehouse for testing changes. You refresh it, you queue for
-it, you hope it still matches prod — and you pay for it twice. Iceberg
-already has the primitive that makes it unnecessary: a branch ref is
+it, you hope it still matches prod — and you pay for it twice. The Apache Iceberg
+table format already has the primitive that makes it unnecessary: a branch
+ref is
 metadata-only, so a "copy" of a 5M-row table costs **10 ms and zero
 bytes** on any compliant catalog. What was missing is the *workflow* —
 deciding what a change touches, making its inputs reproducible, showing
