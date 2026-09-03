@@ -13,20 +13,23 @@ overwrite execution are on the
 [roadmap](https://github.com/satya1395/reble#roadmap-to-10); the kind
 returns when it means something.
 
-Until then, full rebuild inside a branch is the honest primitive: it is
-what makes reruns deterministic and diffs trustworthy.
+Until then, every run rebuilds its models from scratch — which is
+precisely why reruns give the same answer and diffs can be trusted.
 
-## Retries are idempotent verbs
+## If something fails halfway, just run it again
 
-Runs skip unchanged models (AST hashes) and re-execute only what a change
-touches; promotion records per-table re-entrant state. **"Retry" is
-therefore "run the same command again"** — it resumes rather than
-duplicates, which is also why Airflow's plain task retries work with no
-special handling.
+Runs remember what already finished. If a run dies in the middle of fifty
+models, running the same command again picks up where it left off —
+finished models aren't redone, and nothing gets duplicated. The same
+applies to promotion: interrupt it, run it again, done.
 
-`reble run --force` rebuilds the full scope even when SQL is unchanged
-(the engine-switch case). A rerun *replaces* the previous branch output —
-forcing never duplicates rows.
+**"Retry" is just "run the same command again."** That's also why your
+scheduler's normal retry settings need no special handling — Airflow
+retries a Reble task like any other task.
+
+`reble run --force` means "redo everything in scope, even though nothing
+changed" — useful when you've switched compute engines. Forcing never
+duplicates rows: a rerun always *replaces* the previous result.
 
 ## Backfills are branch-shaped today, date-shaped soon
 

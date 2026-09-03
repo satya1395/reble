@@ -11,10 +11,10 @@ scope = edited models ∪ downstream closure
 
 ## How edits are detected
 
-Reble hashes the **canonical SQL AST** (via SQLGlot), not the file text.
-Cosmetic edits — whitespace, comments, keyword casing — hash identically
-and never trigger a run. A semantic edit (new filter, new join, new
-column) changes the hash and enters the scope.
+Reble reads the *structure* of your SQL, not its text. Reformat the
+file, fix a comment, change the casing — nothing happens, because
+structurally nothing changed. Add a filter, a join, a column — that model
+enters the scope.
 
 Everything downstream of an edit is pulled in, because a model whose
 inputs changed is itself changed. Cap the cascade with `--depth N` if you

@@ -12,11 +12,11 @@ import Mermaid from "../../components/Mermaid.astro";
     style M stroke-dasharray: 5
 `}</Mermaid>
 
-Promotion is per-table fast-forwards on vanilla catalogs, with recorded,
-re-entrant state — an interrupted promote resumes without re-executing
-already-promoted tables. Promotion is also *provenance-carrying*: every
-branch snapshot records the model name, AST hash, and run id that produced
-it, and that metadata travels with the snapshot to main.
+Promotion moves one table at a time and remembers its progress —
+interrupt it, run it again, and it finishes the job without redoing the
+tables it already moved. Every table it moves also carries a record of
+which model and which code produced it, and that record travels into
+production — permanently answerable from the catalog.
 
 ## Advisory vs authoritative diffs
 

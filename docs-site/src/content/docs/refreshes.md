@@ -16,11 +16,11 @@ Two kinds of scope, one closure rule:
 
 - **SQL changed** (the branch case): scope is inferred — edited models
   plus their downstream closure. See [scope](scope.md).
-- **Data changed** (the nightly case): `reble run --refresh` scopes to
-  exactly the models whose upstream snapshots moved since the model last
-  built. An input ingested overnight makes its models stale; the
-  downstream closure joins them. On a quiet night it's an empty scope
-  that costs one catalog listing.
+- **Data changed** (the nightly case): `reble run --refresh` rebuilds
+  exactly the models whose inputs got new data since they last built —
+  plus everything built on top of those. New rows landed overnight? The
+  models that read them rebuild; everything else doesn't. On a quiet
+  night, nothing rebuilds and the check costs almost nothing.
 
 `--refresh` and `--models` are mutually exclusive;
 `reble estimate --refresh` previews the same scope.
