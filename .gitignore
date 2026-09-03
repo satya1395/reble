@@ -18,9 +18,8 @@ htmlcov/
 demo/
 dist/
 # internal strategy doc — not published
-design notes
-# internal strategy doc — not published
-design notes.md
+PRD.md
+prd.md
 # local tooling state
 .zcode/
 .DS_Store
