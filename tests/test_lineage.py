@@ -103,9 +103,7 @@ def test_parse_header_stops_at_first_non_comment():
 def test_cte_names_are_not_upstream_tables():
     """A CTE reference (`with x as (...) select * from x`) is not an input
     table — regression: models with CTEs failed with 'input not found'."""
-    from reble.lineage import build_graph, table_refs
-    from reble.lineage import parse_model_sql
-    import pathlib
+    from reble.lineage import parse_model_sql, table_refs
 
     tree = parse_model_sql(
         "with latest as (select *, row_number() over "
