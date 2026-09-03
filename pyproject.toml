@@ -1,6 +1,6 @@
 [project]
 name = "reble"
-version = "0.6.0"
+dynamic = ["version"]
 description = "Git-style branching for Iceberg data warehouses: scoped branches, row-level diffs, fast-forward promotion."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -55,6 +55,9 @@ reble-mcp = "reble.mcp_server:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/reble/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reble"]
