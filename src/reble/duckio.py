@@ -13,8 +13,14 @@ acceptable here and only here).
                                 fallback to arrow)
   memory_limit: e.g. "4GB"     (duckdb spills to temp_directory beyond it)
   temp_directory: path         (default .reble/spill)
-  settings: {k: v}             (raw SET passthrough — e.g. s3 credentials
-                                for remote reads)
+  settings: {k: v}             (raw SET passthrough — overrides S3
+                                auto-configuration below)
+
+S3 credentials: when a scan location is s3:// and the user hasn't provided
+`settings`, region + credentials are resolved via boto3 — which honors
+AWS_PROFILE, environment keys, and SSO — and applied to duckdb. Values are
+never logged or persisted. Precedence: manual `settings` → boto3-resolved →
+duckdb's own `LOAD aws` credential chain.
 """
 
 from __future__ import annotations
@@ -61,7 +67,34 @@ class DuckIo:
             con.execute(f"SET temp_directory='{temp}';")
         for key, value in (self.cfg.get("settings") or {}).items():
             con.execute(f"SET {key}='{value}';")
+        self._configure_s3(con)
         return con
+
+    def _configure_s3(self, con: duckdb.DuckDBPyConnection) -> None:
+        """Resolve region + credentials via boto3 and apply them to duckdb.
+
+        Manual `settings` win — anything the user set is left untouched.
+        Never logs values.
+        """
+        if self.cfg.get("settings"):
+            return  # explicit settings take full responsibility
+        resolved = _boto3_s3_credentials()
+        if resolved is None:
+            # last resort: duckdb's own credential chain
+            try:
+                con.execute("LOAD aws;")
+                con.execute("CALL load_aws_credentials();")
+            except Exception:  # noqa: BLE001 — local-only setups don't need s3
+                pass
+            return
+        region, creds = resolved
+        con.execute("LOAD httpfs;")
+        if region:
+            con.execute(f"SET s3_region='{region}';")
+        con.execute(f"SET s3_access_key_id='{creds.access_key}';")
+        con.execute(f"SET s3_secret_access_key='{creds.secret_key}';")
+        if creds.token:
+            con.execute(f"SET s3_session_token='{creds.token}';")
 
     # ----------------------------------------------------------- snapshot io
 
@@ -116,3 +149,29 @@ def _scan_location(table) -> str | None:
     if location.startswith("file://"):
         return location[len("file://"):]
     return location
+
+
+_S3_CRED_CACHE: list = []  # [(region, creds)] — resolved once per process
+
+
+def _boto3_s3_credentials():
+    """(region, credentials) from boto3's default chain, cached per process.
+
+    Honors AWS_PROFILE, environment keys, SSO. Refreshable credential
+    objects stay refreshable through the cache. Returns None when boto3 is
+    unavailable or no credentials resolve (pure-local setups).
+    """
+    if _S3_CRED_CACHE:
+        return _S3_CRED_CACHE[0]
+    try:
+        import boto3
+
+        session = boto3.session.Session()
+        region = session.region_name
+        creds = session.get_credentials()
+        if creds is None:
+            return None
+    except Exception:  # noqa: BLE001 — boto3 absent (extra not installed)
+        return None
+    _S3_CRED_CACHE.append((region, creds))
+    return _S3_CRED_CACHE[0]
