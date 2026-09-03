@@ -12,8 +12,6 @@ export default defineConfig({
       title: "Reble",
       description:
         "Git-style branching for Iceberg data warehouses: scoped branches, row-level diffs, fast-forward promotion.",
-      logo: { src: "./src/assets/logo.svg" },
-      favicon: "/favicon.svg",
       editLink: {
         baseUrl: "https://github.com/satya1395/reble/edit/main/docs-site",
       },
