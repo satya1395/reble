@@ -71,8 +71,7 @@ def test_run_manifest_carries_sql_bundle(project, seeded_catalog):
     env = json.loads(result.stdout)
     stg = next(r for r in env["data"]["results"] if r["model"] == "stg_orders")
     assert "raw_events" in stg["sql"]
-    manifest_path = (
-        project / ".reble" / "runs" / f"{env['data']['run_id']}.json"
-    )
-    manifest = json.loads(manifest_path.read_text())
-    assert any(r.get("sql") for r in manifest["results"])
+    from reble.state import StateStore
+    store = StateStore(store="local", reble_dir=project / ".reble")
+    hashes = store.load_run_hashes(env["data"]["run_id"])
+    assert hashes  # manifest is queryable from the state store

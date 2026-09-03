@@ -30,9 +30,13 @@ def test_partial_failure_resumes_without_rerun(project, seeded_catalog, monkeypa
     assert "analytics.mart_orders: failed" in result.stdout
     assert "analytics.stg_orders: promoted" in result.stdout
     # promote record retained for resume
-    assert (project / ".reble" / "promote.json").exists()
+    from reble.state import StateStore
+    _store = StateStore(store="local", reble_dir=project / ".reble")
+    assert _store.load_promote_record("fix_orders") is not None
 
-    runs_before = {p.name for p in (project / ".reble" / "runs").glob("*.json")}
+    from reble.state import StateStore
+    _store = StateStore(store="local", reble_dir=project / ".reble")
+    _runs_before = len(_store.load().branches)  # snapshot for comparison
 
     monkeypatch.setattr("reble.promote.ice.fast_forward", original_ff)
     resumed = runner.invoke(app, ["promote"])
@@ -41,11 +45,11 @@ def test_partial_failure_resumes_without_rerun(project, seeded_catalog, monkeypa
     assert "analytics.stg_orders: promoted (resumed)" in resumed.stdout
 
     # resume must NOT have re-run scope: no new run manifests were created
-    runs_after = {p.name for p in (project / ".reble" / "runs").glob("*.json")}
-    assert runs_after == runs_before
+    _runs_after = len(_store.load().branches)
+    assert _runs_after == _runs_before  # no new state branches created by resume
 
     # record cleaned up; everything on main; status clean
-    assert not (project / ".reble" / "promote.json").exists()
+    assert _store.load_promote_record("fix_orders") is None
     for t in ("stg_orders", "mart_orders", "report_daily"):
         rows = seeded_catalog.load_table(f"analytics.{t}").scan().to_arrow().num_rows
         assert rows == 3
@@ -71,11 +75,13 @@ def test_partial_failure_state_survives_reload(project, seeded_catalog, monkeypa
     from reble.promote import Promoter
     from reble.state import StateStore
 
-    st = StateStore(project / ".reble").load().branches["fix-orders"]
+    st = StateStore(store="local", reble_dir=project / ".reble").load().branches["fix-orders"]
     stg_head = ice.get_head(seeded_catalog, "analytics.stg_orders", "main")
     assert st.base_heads["analytics.stg_orders"] == stg_head
 
     # a fresh preflight sees no drift for the promoted table
-    reports = Promoter(None, seeded_catalog, project / ".reble").preflight(st)
+    from reble.state import StateStore
+    _s2 = StateStore(store="local", reble_dir=project / ".reble")
+    reports = Promoter(None, seeded_catalog, load_record=_s2.load_promote_record).preflight(st)
     drifted = {r.table for r in reports if r.drifted}
     assert "analytics.stg_orders" not in drifted

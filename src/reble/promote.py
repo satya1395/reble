@@ -13,7 +13,6 @@ No three-way merges. Ever. promote (fast-forward or re-run) or discard.
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -50,14 +49,19 @@ class PromoteRecord:
 
 
 class Promoter:
-    def __init__(self, cfg, catalog, reble_dir: Path, persist=None):
+    def __init__(self, cfg, catalog, reble_dir: Path | None = None, persist=None,
+                 load_record=None, save_record=None, delete_record=None):
         """`persist` is called after each per-table state mutation so a promote
         interrupted mid-loop resumes without misreading stale base heads as
-        drift (and without re-executing already-promoted models)."""
+        drift. Record I/O is injectable: the StateStore wires load/save/delete
+        callables so promote records work with any state backend."""
         self.cfg = cfg
         self.catalog = catalog
         self.reble_dir = reble_dir
         self._persist = persist
+        self._load_record = load_record
+        self._save_record = save_record
+        self._delete_record = delete_record
 
     def preflight(self, branch_state) -> list[DriftReport]:
         reports: list[DriftReport] = []
@@ -71,8 +75,7 @@ class Promoter:
 
     def promote(self, branch_state, ff_only: bool = False) -> dict:
         """Per-table fast-forwards; re-entrant state in .reble/promote.json."""
-        record_path = self.reble_dir / "promote.json"
-        record = self._load_record(record_path, branch_state.data_branch)
+        record = self._load_record_from_store(branch_state.data_branch)
 
         def advance(table_id: str, head: int) -> None:
             # The table's base is now main itself — update before anything
@@ -108,38 +111,27 @@ class Promoter:
             except Exception as exc:  # noqa: BLE001
                 results[table_id] = {"status": "failed", "reason": str(exc)}
             record.tables[table_id] = results[table_id]
-            self._save_record(record_path, record)
+            self._save_record_to_store(record)
 
         terminal = ("promoted", "up-to-date", "promoted (resumed)", "skipped")
         if all(r.get("status") in terminal for r in results.values()):
-            record_path.unlink(missing_ok=True)
+            self._delete_record_from_store(branch_state.data_branch)
         return results
 
-    @staticmethod
-    def _load_record(path: Path, branch: str) -> PromoteRecord:
-        if path.exists():
-            try:
-                data = json.loads(path.read_text())
-                if data.get("branch") == branch:
-                    return PromoteRecord.from_dict(data)
-            except json.JSONDecodeError:
-                pass
+    def _load_record_from_store(self, branch: str) -> PromoteRecord:
+        if self._load_record:
+            data = self._load_record(branch)
+            if data and data.get("branch") == branch:
+                return PromoteRecord.from_dict(data)
         return PromoteRecord(branch=branch)
 
-    @staticmethod
-    def _save_record(path: Path, record: PromoteRecord) -> None:
-        import os
-        import tempfile
+    def _save_record_to_store(self, record: PromoteRecord) -> None:
+        if self._save_record:
+            self._save_record(record.to_dict())
 
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w") as f:
-                f.write(json.dumps(record.to_dict(), indent=2))
-            os.replace(tmp, path)
-        finally:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
+    def _delete_record_from_store(self, data_branch: str) -> None:
+        if self._delete_record:
+            self._delete_record(data_branch)
 
 
 def orphan_pin_tags(catalog, cfg, active_tags: set[str]) -> list[tuple[str, str]]:

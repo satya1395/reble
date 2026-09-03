@@ -246,7 +246,11 @@ def test_gc_drops_orphan_pin_tags(project, seeded_catalog):
 
 def test_discard_refuses_during_promote(project, seeded_catalog):
     _invoke("run")
-    (project / ".reble" / "promote.json").write_text('{"branch": "fix_orders"}')
+    from reble.state import StateStore
+
+    _store = StateStore(store="local", reble_dir=project / ".reble")
+    _store.validate()
+    _store.save_promote_record({"branch": "fix_orders", "tables": {}})
     _invoke("branch", "discard", "fix_orders", "--yes", expect=1)
 
 

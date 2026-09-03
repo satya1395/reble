@@ -55,14 +55,16 @@ def test_preflight_detects_pin_and_base_drift(tmp_path):
 
 def test_promote_record_round_trip(tmp_path):
     from reble.promote import PromoteRecord
+    from reble.state import StateStore
 
+    store = StateStore(store="local", reble_dir=tmp_path)
+    store.validate()
     record = PromoteRecord(branch="b")
     record.tables["analytics.t"] = {"status": "promoted"}
-    path = tmp_path / "promote.json"
-    Promoter._save_record(path, record)
-    loaded = Promoter._load_record(path, "b")
-    assert loaded.tables["analytics.t"]["status"] == "promoted"
-    assert Promoter._load_record(path, "other").tables == {}  # wrong branch → fresh
+    store.save_promote_record(record.to_dict())
+    loaded = store.load_promote_record("b")
+    assert loaded["tables"]["analytics.t"]["status"] == "promoted"
+    assert store.load_promote_record("other") is None  # wrong branch → none
 
 
 def test_orphan_pin_tags(seeded_catalog, tmp_path):

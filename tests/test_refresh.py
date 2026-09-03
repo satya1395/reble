@@ -142,9 +142,11 @@ def test_crashed_run_resumes_without_rerunning_completed(project, seeded_catalog
     # stg_orders completed and its progress was persisted despite the crash
     import json as _json
 
-    state = _json.loads((project / ".reble" / "state.json").read_text())
-    branch = next(iter(state["branches"].values()))
-    assert "stg_orders" in branch["model_hashes"]
+    from reble.state import StateStore
+    store = StateStore(store="local", reble_dir=project / ".reble")
+    branch = store.load().branches  # dict keyed by changeset
+    any_stg = any("stg_orders" in bs.model_hashes for bs in branch.values())
+    assert any_stg, "stg_orders hash should be persisted despite crash"
 
     # retry: stg skips (already done), mart + downstream run
     monkeypatch.setattr(DuckDbEngine, "execute_model", original)

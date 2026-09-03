@@ -105,7 +105,11 @@ class Reble:
         self.loader = ConfigLoader(self.project_root)
         self.cfg = self.loader.load(profile=profile)
         self.reble_dir = self.loader.reble_dir
-        self.store = StateStore(self.reble_dir)
+        sc = self.cfg.state
+        self.store = StateStore(
+            store=sc.store, uri=sc.uri, reble_dir=self.reble_dir
+        )
+        self.store.validate()  # exit 2 before any verb if backend is broken
         self.state = self.store.load()
         self.catalog = load_catalog(self.cfg.warehouse.catalog)
         engine_cls = (
@@ -215,12 +219,12 @@ class Reble:
         if st is not None and st.model_hashes:
             return dict(st.model_hashes)
         if st is not None and st.last_run_id:
-            hashes = _manifest_hashes(self.reble_dir / "runs" / f"{st.last_run_id}.json")
+            hashes = self.store.load_run_hashes(st.last_run_id)
             if hashes:
                 return hashes
         prior = self._state_by_branch(data_branch)
         if prior is not None and prior.last_run_id:
-            return _manifest_hashes(self.reble_dir / "runs" / f"{prior.last_run_id}.json")
+            return self.store.load_run_hashes(prior.last_run_id)
         return {}
 
     def edited_models(
@@ -309,7 +313,10 @@ class Reble:
         # data-branch mapping or the branch epoch (invariant 5).
         self.store.save(self.state)
 
-        runner = Runner(self.cfg, self.catalog, graph, self.engine, self.reble_dir)
+        runner = Runner(
+            self.cfg, self.catalog, graph, self.engine, self.reble_dir,
+            save_manifest=self.store.save_run_manifest,
+        )
 
         if scope.is_empty:
             return envelope.envelope(
@@ -610,7 +617,10 @@ class Reble:
                 m for m in edited if st.model_hashes.get(m) != hashes.get(m)
             ]
 
-            promoter = Promoter(self.cfg, self.catalog, self.reble_dir)
+            promoter = Promoter(
+                self.cfg, self.catalog, self.reble_dir,
+                load_record=self.store.load_promote_record,
+            )
             drifted = [r for r in promoter.preflight(st) if r.drifted]
             if drifted:
                 drift = True
@@ -657,7 +667,10 @@ class Reble:
         st = self.branch_state(changeset_id, data_branch)
 
         promoter = Promoter(
-            self.cfg, self.catalog, self.reble_dir, persist=lambda: self.store.save(self.state)
+            self.cfg, self.catalog, self.reble_dir, persist=lambda: self.store.save(self.state),
+            load_record=self.store.load_promote_record,
+            save_record=self.store.save_promote_record,
+            delete_record=self.store.delete_promote_record,
         )
         reports = promoter.preflight(st)
         drifted = [r for r in reports if r.drifted]
@@ -697,7 +710,10 @@ class Reble:
                 )
             graph = self.graph()
             scope = compute_scope(graph, st.scope)
-            runner = Runner(self.cfg, self.catalog, graph, self.engine, self.reble_dir)
+            runner = Runner(
+            self.cfg, self.catalog, graph, self.engine, self.reble_dir,
+            save_manifest=self.store.save_run_manifest,
+        )
             manifest = runner.run(data_branch, scope, st.base_ref, {})
             for table in scope.pinned_inputs:
                 table_id = relation_id(self.cfg, table)
@@ -844,9 +860,9 @@ class Reble:
 
     def branch_discard(self, name: str) -> dict:
         """Drop branch refs and pin tags; refuses if promote was in progress."""
-        if (self.reble_dir / "promote.json").exists():
+        if self.store.load_promote_record(name) is not None:
             raise RebleError(
-                "promote in progress — resume it or remove .reble/promote.json first"
+                "promote in progress — resume it or let it finish first"
             )
         dropped = 0
         for table_id in list_tables(self.catalog):

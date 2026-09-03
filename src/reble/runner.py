@@ -6,7 +6,6 @@ selected engine. Idempotent per model via AST hashes in the run manifest.
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -48,12 +47,14 @@ class RunManifest:
 
 
 class Runner:
-    def __init__(self, cfg: Config, catalog, graph: Graph, engine, reble_dir: Path):
+    def __init__(self, cfg: Config, catalog, graph: Graph, engine, reble_dir: Path,
+                 save_manifest=None):
         self.cfg = cfg
         self.catalog = catalog
         self.graph = graph
         self.engine = engine
         self.reble_dir = reble_dir
+        self._save_manifest = save_manifest
 
     def preflight(self, branch: str, scope: ScopePlan) -> dict:
         """The dry-run block: what a real run would do."""
@@ -170,6 +171,8 @@ class Runner:
             )
 
         manifest.duration_ms = int((time.time() - manifest.started_at) * 1000)
+        if self._save_manifest:
+            self._save_manifest(manifest.run_id, manifest.branch, manifest.to_dict())
         self.io_warnings = io_warnings
         emit(
             "run.end",
@@ -177,7 +180,6 @@ class Runner:
             ok=all(r.status != "error" for r in manifest.results),
             duration_ms=manifest.duration_ms,
         )
-        self._write_manifest(manifest)
         _ = repin  # pin_snapshot() above retargets when tags exist; epoch pins are the default path
         return manifest
 
@@ -199,11 +201,6 @@ class Runner:
         for name in names:
             visit(name, set())
         return ordered
-
-    def _write_manifest(self, manifest: RunManifest) -> None:
-        runs_dir = self.reble_dir / "runs"
-        runs_dir.mkdir(parents=True, exist_ok=True)
-        (runs_dir / f"{manifest.run_id}.json").write_text(json.dumps(manifest.to_dict(), indent=2))
 
 
 def _table_exists(catalog, table_id: str) -> bool:

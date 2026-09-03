@@ -48,6 +48,12 @@ class BranchingConfig(BaseModel):
     ttl_days: int = 14
 
 
+class StateConfig(BaseModel):
+    """State backend: local SQLite (default) or shared Postgres."""
+    store: Literal["local", "postgres"] = "local"
+    uri: str | None = None  # required when store=postgres
+
+
 class DiffConfig(BaseModel):
     keys: dict[str, list[str]] = Field(default_factory=dict)
     on_missing_key: Literal["hash", "error"] = "hash"
@@ -73,6 +79,7 @@ class Config(BaseModel):
     warehouse: WarehouseConfig
     lineage: LineageConfig = Field(default_factory=LineageConfig)
     branching: BranchingConfig = Field(default_factory=BranchingConfig)
+    state: StateConfig = Field(default_factory=StateConfig)
     diff: DiffConfig = Field(default_factory=DiffConfig)
     engines: EnginesConfig = Field(default_factory=EnginesConfig)
     compute_policy: ComputePolicy = Field(default_factory=ComputePolicy)
