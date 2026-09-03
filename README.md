@@ -59,6 +59,15 @@ are copied.
 
 ## Quick start
 
+No models of your own yet? Watch the whole loop — branch, edit, diff,
+drift, promote — in one command against a throwaway local catalog:
+
+```bash
+git clone https://github.com/satya1395/reble && cd reble && ./demo.sh
+```
+
+Or with your own models:
+
 ```
 pip install reble
 reble init                # writes reble.yml; probes your catalog
