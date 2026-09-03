@@ -13,6 +13,21 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: uv pip install -e ".[dev,mcp]"
+      - name: Lint
+        run: uv run ruff check src/reble/ tests/
+      - name: Test
+        run: uv run pytest tests/ -q
+
+  # Postgres integration: service containers are Linux-only on GH Actions
+  postgres:
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16-alpine
@@ -29,14 +44,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
       - name: Install
-        # setup-uv's python-version input already created .venv (VIRTUAL_ENV);
-        # uv pip targets it automatically.
         run: uv pip install -e ".[dev,mcp,postgres]"
-      - name: Lint
-        run: uv run ruff check src/reble/ tests/
-      - name: Test
-        run: uv run pytest tests/ -q
+      - name: Postgres integration tests
+        run: uv run pytest tests/test_state.py -q -k Postgres
         env:
           REBLE_PG_TEST_URI: postgresql://postgres:reble@localhost:5432/postgres
