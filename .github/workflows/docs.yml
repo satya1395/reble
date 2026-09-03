@@ -4,41 +4,42 @@ on:
   push:
     branches: [main]
     paths:
-      - docs/**
-      - mkdocs.yml
+      - docs-site/**
       - .github/workflows/docs.yml
   pull_request:
     paths:
-      - docs/**
-      - mkdocs.yml
+      - docs-site/**
       - .github/workflows/docs.yml
   workflow_dispatch:
 
-permissions:
-  contents: read
+# Build the Astro/Starlight docs site (docs-site/) and deploy to GitHub
+# Pages. PRs build + linkcheck without deploying. `linkcheck` asserts every
+# internal link resolves in the built HTML — the mkdocs --strict equivalent.
 
 concurrency:
   group: docs-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Always build — on a PR this is the check that a broken link or bad nav
-  # entry fails the PR rather than the deploy (mkdocs runs with strict: true).
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -r docs/requirements.txt
-      - run: mkdocs build --strict
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+      - name: Build
+        run: |
+          cd docs-site
+          npm ci
+          npm run build
+          npm run linkcheck
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: docs-site/dist
 
-  # Publish only from main. Requires Settings → Pages → Source: GitHub Actions.
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build

@@ -29,7 +29,7 @@ and fast-forwards production when you accept. There is no merge step, on
 purpose: promote or discard, never three-way-merge data, because data
 merges are where correctness goes to die.
 
-![The Reble loop: build, edit on a branch, diff the rows, promote](docs/assets/demo.gif)
+![The Reble loop: build, edit on a branch, diff the rows, promote](docs-site/src/content/docs/assets/demo.gif)
 
 ## How it works
 

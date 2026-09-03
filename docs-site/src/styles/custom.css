@@ -1,0 +1,76 @@
+/* Reble docs — Starlight customization */
+
+:root,
+:root[data-theme="light"] {
+  --sl-hue: 175;
+  --sl-accent-low: hsl(175 55% 85%);
+  --sl-accent: hsl(175 80% 30%);
+  --sl-accent-high: hsl(175 88% 16%);
+}
+
+:root[data-theme="dark"] {
+  --sl-accent-low: hsl(175 45% 18%);
+  --sl-accent: hsl(175 70% 55%);
+  --sl-accent-high: hsl(175 80% 80%);
+}
+
+/* Hero (landing) */
+.hero {
+  padding: 3.5rem 0 2.5rem;
+  text-align: center;
+}
+.hero img {
+  max-width: min(100%, 720px);
+  width: 100%;
+  border-radius: var(--sl-radius);
+  border: 1px solid var(--sl-color-gray-5);
+  box-shadow: var(--sl-shadow-lg);
+  margin-top: 2rem;
+}
+.hero .install {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.95rem;
+  background: var(--sl-color-gray-6);
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 999px;
+  padding: 0.5rem 1.1rem;
+  margin-top: 1.5rem;
+}
+
+/* Feature cards */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1rem;
+  margin: 2rem 0;
+}
+.cards .card {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: var(--sl-radius);
+  padding: 1.1rem 1.2rem;
+  background: var(--sl-color-gray-7, transparent);
+}
+.cards .card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+.cards .card p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--sl-color-gray-3);
+}
+
+/* Mermaid diagrams: center, inherit colors */
+.mermaid-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+}
+.mermaid-wrap svg {
+  max-width: 100%;
+  height: auto;
+}

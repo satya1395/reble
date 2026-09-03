@@ -1,5 +1,7 @@
-# Performance
-
+---
+title: "Performance"
+description: "Measured numbers, reproducible benchmarks."
+---
 Every number on this page is **measured, reproducible, and honest about its
 limits** — laptop hardware, list-price regions, no clusters. Run the
 commands yourself; scripts are in the repo.

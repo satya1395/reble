@@ -24,5 +24,8 @@ prd.md
 .zcode/
 .DS_Store
 site/
+docs-site/node_modules/
+docs-site/dist/
+docs-site/.astro/
 LAUNCH.md
 OPTIMIZATIONS.md

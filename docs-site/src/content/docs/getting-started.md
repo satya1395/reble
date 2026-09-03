@@ -1,5 +1,7 @@
-# Getting started
-
+---
+title: "Quickstart"
+description: "From zero to a promoted branch in one sitting."
+---
 Everything runs on your machine: a sqlite-backed Iceberg catalog, a local
 file warehouse, DuckDB compute. No S3, no credentials, no Docker. The same
 steps work against a real catalog (Glue, Polaris, Nessie, Hive, REST) by

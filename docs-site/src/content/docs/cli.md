@@ -1,5 +1,7 @@
-# Command reference
-
+---
+title: "CLI reference"
+description: "Every command, flag, and exit code."
+---
 Every command accepts the global flags `--config PATH`, `--profile NAME`,
 `--json`, `--no-color`, `--quiet`. Machine consumers: `--json` emits the
 stable envelope (SPEC §6), and `run`/`diff` accept `--events` for versioned

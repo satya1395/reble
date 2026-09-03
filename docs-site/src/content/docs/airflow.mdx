@@ -1,4 +1,9 @@
-# Airflow
+---
+title: "Airflow"
+description: "Reble as the step your scheduler runs."
+---
+
+import Mermaid from "../../components/Mermaid.astro";
 
 Keep your Airflow. Reble doesn't replace it, wrap it, or sit beside it —
 it's the **one command your refresh DAG runs**. Airflow decides *when*
@@ -63,8 +68,7 @@ Make **the last task of your ingestion DAG** the refresh. Lineage — read
 from the SQL itself — knows which sources drive which models, so the
 refresh rebuilds exactly the chain the ingest touched, and nothing else:
 
-```mermaid
-flowchart LR
+<Mermaid>{`flowchart LR
     ING["your ingestion DAG<br/>lands raw_events"] --> REF{{"reble run --refresh<br/>(last task)"}}
     subgraph lineage ["lineage — read from the SQL, nothing configured"]
         direction TB
@@ -83,7 +87,7 @@ flowchart LR
     classDef untouched fill:#9e9e9e,color:#fff
     class STG,MART rebuilt
     class DIM,SEG,CUST untouched
-```
+`}</Mermaid>
 
 No sensors polling for "is the data there yet", no per-source task wiring:
 the moment `raw_events` lands a new snapshot, `stg_orders` is stale by

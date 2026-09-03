@@ -1,4 +1,9 @@
-# Concepts
+---
+title: "Core concepts"
+description: "The git↔Reble mapping, pinning, and promote-or-discard."
+---
+
+import Mermaid from "../../components/Mermaid.astro";
 
 One piece of vocabulary: a **model** is one SQL file that produces one
 table — nothing more. Everything below builds on that.
@@ -166,14 +171,13 @@ snapshot, and any mismatch (exit code 3) means promote will force a re-run.
 
 ## Promote or discard. There is no third option.
 
-```mermaid
-flowchart LR
+<Mermaid>{`flowchart LR
     D["reble diff<br/>(advisory)"] --> P{"reble promote"}
     P -->|"pins == main"| FF["fast-forward<br/>(per-table, resumable)"]
     P -->|"drift"| RR["re-pin + scoped re-run<br/>+ fresh authoritative diff"] --> FF
     P -.->|"never"| M["three-way merge"]
     style M stroke-dasharray: 5
-```
+`}</Mermaid>
 
 Promotion is per-table fast-forwards on vanilla catalogs, with recorded,
 re-entrant state — an interrupted promote resumes without re-executing

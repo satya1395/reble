@@ -1,5 +1,7 @@
-# AWS: Glue + S3
-
+---
+title: "AWS (Glue + S3)"
+description: "Run Reble against your own Glue catalog and S3 bucket."
+---
 Run Reble against your AWS account: Glue as the catalog, S3 as the
 warehouse. Nothing to deploy — the CLI is the client. This walkthrough
 takes about ten minutes from a clean machine and cleans up at the end.

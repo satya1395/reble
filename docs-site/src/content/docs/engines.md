@@ -1,5 +1,7 @@
-# Engines
-
+---
+title: "Engines"
+description: "DuckDB by default, Spark when transforms outgrow it."
+---
 Reble's engine interface is one method: execute a model's SQL against
 pinned input snapshots and write the result to a branch. Two engines
 implement it today — **DuckDB** (default, embedded, zero setup) and

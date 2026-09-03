@@ -1,5 +1,7 @@
-# What Reble replaces
-
+---
+title: "What Reble replaces"
+description: "Layer by layer: what stays, what goes."
+---
 > **Reble replaces the transformation layer and the staging environment. It
 > shrinks the orchestrator and the compute bill. It leaves ingestion,
 > storage, the catalog, and BI alone.**

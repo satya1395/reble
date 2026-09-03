@@ -1,6 +1,0 @@
-# Docs site toolchain (github.com/satya1395/reble → satya1395.github.io/reble).
-# Separate from the runtime pins in requirements-lock.txt: nothing here ships
-# with the package, so it upgrades on its own schedule.
-mkdocs==1.6.1
-mkdocs-material==9.5.49
-pymdown-extensions==10.13

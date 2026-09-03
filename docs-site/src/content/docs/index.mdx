@@ -1,26 +1,45 @@
 ---
-hide:
-  - navigation
+title: "Introduction"
+description: "Git-style branching for Iceberg data warehouses: scoped branches, row-level diffs, fast-forward promotion."
+template: splash
+hero:
+  tagline: An open SQL engine for your Iceberg lakehouse — every change runs on an isolated zero-copy branch, you review the exact rows it changes, then fast-forward production. No warehouse server, no clones, no merges.
+  actions:
+    - text: Get started
+      link: /reble/getting-started/
+      variant: primary
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/satya1395/reble
+      icon: external
 ---
 
-# Reble
+import Mermaid from "../../components/Mermaid.astro";
+import demoGif from "./assets/demo.gif";
 
-**An open SQL engine for your Iceberg lakehouse.**
+<div class="hero">
+  <span class="install">pip install reble</span>
+  <img src={demoGif.src} alt="The Reble loop: build, edit on a branch, diff the rows, promote" />
+</div>
 
-Your models are plain SQL files; Reble derives their dependencies, builds
-the tables into your catalog and bucket, and refreshes exactly what moved —
-triggered by cron, CI, Airflow, or an agent. And the engine is
-branch-capable at the core: every change can run on an isolated zero-copy
-branch where you review the exact rows it changes, then fast-forward
-production. No warehouse server, no clones, no merges.
-
-!!! note "Status: early, but real"
-
-    The full loop works today — `init → run → diff → status → promote`, in
-    git or standalone, with 75 passing tests on Linux and macOS. `pip install reble`
-    and go. Feedback is by far the most valuable contribution right now —
-    [open a discussion](https://github.com/satya1395/reble/discussions) —
-    and the [docs site](/) you're reading is built from this repo.
+<div class="cards">
+  <div class="card">
+    <h3>Branch your data</h3>
+    <p>Native Iceberg branch refs — a copy of a 5M-row table costs 10 ms and zero bytes. Only the change's blast radius.</p>
+  </div>
+  <div class="card">
+    <h3>Diff the rows</h3>
+    <p>Keyed row-level diffs with live progress — added, removed, changed — against the branch point or main.</p>
+  </div>
+  <div class="card">
+    <h3>Promote, never merge</h3>
+    <p>Fast-forward when your pinned inputs still match main; a scoped re-run when they don't. No three-way data merges, ever.</p>
+  </div>
+  <div class="card">
+    <h3>DuckDB or Spark</h3>
+    <p>Embedded DuckDB by default; the Spark engine behind the same interface when transforms outgrow a single node.</p>
+  </div>
+</div>
 
 ## The problem
 
@@ -71,16 +90,13 @@ way of running them in order. If that's you:
 dbt users are welcome (your SQL ports almost unchanged), but nothing
 assumes dbt.
 
-![The Reble loop](assets/demo.gif)
-
 ## Where it sits
 
-```mermaid
-flowchart TB
+<Mermaid>{`flowchart TB
     WHO["who triggers — cron · CI · Airflow · AI agents (MCP)"]
     MODELS["your models — models/*.sql, plain SQL + a 3-line header"]
     REBLE["Reble — SQLGlot lineage · scope · pin · run · diff · promote"]
-    ENGINE["compute — DuckDB (today), Spark (behind the same interface)"]
+    ENGINE["compute — DuckDB (default) · Spark (same interface)"]
     CAT["your Iceberg catalog — Glue · Polaris · Nessie · Hive · REST · sql"]
     STORE[("your storage — S3 · GCS · local disk")]
     WHO -->|"invokes one verb"| REBLE
@@ -88,7 +104,7 @@ flowchart TB
     REBLE --> ENGINE
     ENGINE -->|"branch refs · tag pins · snapshots"| CAT
     CAT --> STORE
-```
+`}</Mermaid>
 
 Reble owns the transformation layer (the shape dbt-core has); your
 scheduler owns *when*; your catalog and bucket stay yours. State lives
@@ -113,3 +129,12 @@ Nessie, Hive, or any REST-compliant Iceberg catalog. Reble is not a catalog,
 not an orchestrator, and not a new thing to operate. How that stacks up
 against lakeFS, Nessie, and warehouse clones:
 [Comparisons](comparisons.md).
+
+:::note[Status: early, but real]
+The full loop works today — `init → run → diff → status → promote`, in git
+or standalone, with 101 passing tests on Linux and macOS and the Spark
+engine verified against real Glue + S3. `pip install reble` and go.
+Feedback is by far the most valuable contribution right now —
+[open a discussion](https://github.com/satya1395/reble/discussions) — and
+the [docs site](/reble/) you're reading is built from this repo.
+:::
