@@ -130,6 +130,10 @@ block carries the semantics:
 select ... from stg_orders join raw_customers using (customer_id)
 ```
 
+Today `incremental` means full-recompute-with-a-diff-key (watermark and
+partition strategies are on the roadmap); reruns always *replace*, never
+append. `reble run --force` rebuilds unchanged SQL.
+
 Lineage is parsed with SQLGlot: a table reference that matches another model
 is an edge; anything else is an upstream input, pinned with an Iceberg tag at
 run time. Cosmetic edits (whitespace, comments, casing) hash identically on
@@ -212,8 +216,8 @@ under a new change-set.
 | Release | Theme | Highlights | Status |
 | --- | --- | --- | --- |
 | 0.4 | Runs on AWS | Glue + S3 verified end-to-end, credential auto-config, self-cleaning AWS smoke | ✅ shipped |
-| 0.5 | Bigger warehouses | Spark runner (local first, then serverless); GCS + ADLS verification; partitioned tables | next |
-| 0.6 | Team workflows | Documented CI recipes (PR checks, promote gates); multi-writer etiquette; `reble doctor` | planned |
+| 0.5 | Bigger warehouses | Spark runner (local first, then serverless); GCS + ADLS verification; partitioned tables; incremental execution (watermark / insert-overwrite) | next |
+| 0.6 | Backfills & teams | Date-range / partition-scoped backfills (branch + insert-overwrite); documented CI recipes (PR checks, promote gates); multi-writer etiquette; `reble doctor` | planned |
 | 0.7 | Interop | REST catalogs verified (Polaris, Nessie); Trino read adapter on demand; Iceberg views | planned |
 | 0.8 | Operations | Metrics/log hooks; `estimate` v2; Windows support | planned |
 | **1.0** | **GA** | See criteria below | — |

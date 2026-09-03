@@ -274,6 +274,9 @@ def run(
     refresh: bool = typer.Option(
         False, "--refresh", help="Data-driven scope: rebuild models whose upstream snapshots moved"
     ),
+    force: bool = typer.Option(
+        False, "--force", help="Rebuild the scope even if SQL hashes are unchanged"
+    ),
     events: bool = typer.Option(
         False, "--events", help="Stream NDJSON run events on stdout (implies machine mode)"
     ),
@@ -297,6 +300,7 @@ def run(
         change_set=change_set,
         branch=branch,
         refresh=refresh,
+        force=force,
         on_event=ndjson_emitter("run") if events else None,
     )
     if _show_text(json_output, quiet):

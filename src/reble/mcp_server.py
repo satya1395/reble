@@ -76,6 +76,7 @@ def reble_run(
     change_set: str | None = None,
     branch: str | None = None,
     refresh: bool = False,
+    force: bool = False,
 ) -> dict:
     """Materialize a scoped change on an isolated Iceberg branch.
 
@@ -87,7 +88,8 @@ def reble_run(
     branches start with empty scope). Set refresh=True for a data-driven
     scope: rebuild exactly the models whose upstream snapshots moved since
     they last built (the nightly-refresh mode; mutually exclusive with
-    models). Set dry_run=True to preview scope, pins, and full-refreshs
+    models). Set force=True to rebuild the scope even when SQL is
+    unchanged (reruns are replace-not-append, so forcing never duplicates). Set dry_run=True to preview scope, pins, and full-refreshs
     without writing.
     """
     core = _core()
@@ -102,6 +104,7 @@ def reble_run(
             change_set=change_set or generated,
             branch=branch,
             refresh=refresh,
+            force=force,
         )
     except RebleError as exc:
         return _error(exc)

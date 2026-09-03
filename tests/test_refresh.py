@@ -91,3 +91,33 @@ def test_run_refresh_dry_run_writes_nothing(project, seeded_catalog, flag):
     assert result.exit_code == 0, result.stdout
     assert "scope (edited)" in result.stdout
     assert seeded_catalog.list_tables("analytics") == [("analytics", "raw_events")]
+
+
+def test_force_rebuilds_unchanged_models(project, seeded_catalog):
+    """Answer to 'can you force a full rebuild': --models alone skips on
+    unchanged hashes; --force rebuilds. Reruns are replace-not-append —
+    no duplication."""
+    runner.invoke(app, ["run", "--models", "stg_orders,mart_orders"])
+
+    # plain --models rerun: everything skips (hashes match)
+    again = json.loads(
+        runner.invoke(app, ["--json", "run", "--models", "stg_orders,mart_orders"]).stdout
+    )
+    statuses = {r["model"]: r["status"] for r in again["data"]["results"]}
+    assert set(statuses.values()) == {"skipped"}
+
+    # --force: everything reruns, replace-not-append
+    forced = json.loads(
+        runner.invoke(app, ["--json", "run", "--models", "stg_orders,mart_orders", "--force"]).stdout
+    )
+    statuses = {r["model"]: r["status"] for r in forced["data"]["results"]}
+    assert set(statuses.values()) == {"ran"}
+
+    from reble.catalog import get_ref_snapshot
+
+    mart = seeded_catalog.load_table("analytics.mart_orders")
+    branch_snap = get_ref_snapshot(mart, "fix_orders")
+    rows = mart.scan(snapshot_id=branch_snap).to_arrow().to_pylist()
+    # exactly one materialization's worth of rows — the forced rerun
+    # replaced, it did not append (working-tree SQL is amount > 5: all 3)
+    assert len(rows) == 3

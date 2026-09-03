@@ -32,6 +32,7 @@ execute.
 reble run                        # scope inferred from your edits
 reble run --models stg,mart      # explicit scope
 reble run --refresh              # data-driven scope: upstream snapshots moved
+reble run --force                # rebuild even when SQL is unchanged
 reble run --depth 2              # cap the downstream cascade
 reble run --dry-run              # preflight only, writes nothing
 ```

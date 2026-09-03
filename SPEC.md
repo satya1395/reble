@@ -154,6 +154,8 @@ executes.
 
 `--models m1,m2` · `--refresh` (data-driven scope: models whose upstream
 snapshots moved, closed downstream; mutually exclusive with `--models`) ·
+`--force` (rebuild the scope even when SQL hashes are unchanged; reruns
+replace, never append) ·
 `--depth N` (cap cascade; deeper tables marked stale) · `--dry-run` ·
 `--engine NAME` · `--change-set ID` · `--branch NAME` (resume an existing
 data branch under this change-set) · `--events`

@@ -120,8 +120,31 @@ Reble's layer. That means two patterns, and neither involves a human:
 PRs are jobs too: `reble status` (exit 3 on drift) and `reble diff` make
 cheap, meaningful checks in any CI system.
 
-One honest footnote: `incremental` models currently full-refresh everywhere
-(streaming bounds memory, not recompute) until the Spark runner exists.
+### Incremental, retries, and backfills — today's honest answers
+
+**Incremental models full-recompute today.** `kind: incremental` +
+`-- key:` currently means: rebuilt from scratch on every run, with the key
+driving diffs — not watermark-based appends. Watermark and
+partition-insert-overwrite strategies are on the
+[roadmap](https://github.com/satya1395/reble#roadmap-to-10). Until then the
+contract is deliberately simple: every run is a full rebuild of its scope,
+streaming and memory-bounded.
+
+**Retries are idempotent verbs.** Runs skip unchanged models (AST hashes)
+and re-execute only what a change touches; promotion records per-table
+re-entrant state. "Retry" is therefore *run the same command again* — it
+resumes rather than duplicates, which is also why Airflow's plain task
+retries work with no special handling. `reble run --force` rebuilds the
+scope even when SQL is unchanged (a rerun *replaces* the previous output —
+append-never, so forcing never duplicates).
+
+**Backfill today is branch-shaped, not date-shaped.** The scenario from
+[Days you've had](scenarios.md): branch, rebuild the affected models over
+tag-pinned inputs (deterministic reproduction of the past state), diff,
+promote. What does *not* exist yet: backfilling a date range without
+recomputing the whole table — partition-scoped rebuilds are the roadmap
+item, and where Reble intends to beat dbt's `var('start')` pattern with
+branch + partition insert-overwrite.
 
 ## Pinning: why branches are deterministic
 

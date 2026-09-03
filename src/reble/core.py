@@ -264,6 +264,7 @@ class Reble:
         change_set: str | None = None,
         branch: str | None = None,
         refresh: bool = False,
+        force: bool = False,
         on_event: EventCallback | None = None,
     ) -> dict:
         """Resolve scope, create/update the data branch, pin inputs, execute."""
@@ -277,6 +278,8 @@ class Reble:
         st = self.state.branches.get(changeset_id) or self._state_by_branch(data_branch)
         if refresh and models:
             raise RebleError("--refresh and --models are mutually exclusive", exit_code=2)
+        if force and dry_run:
+            raise RebleError("--force with --dry-run has no effect", exit_code=2)
         edited, _ = self.edited_models(graph, st, data_branch)
         if models:
             if isinstance(models, str):
@@ -336,7 +339,7 @@ class Reble:
             data_branch,
             scope,
             st.base_ref,
-            st.model_hashes,
+            {} if force else st.model_hashes,  # --force: rebuild the scope
             changeset_id=changeset_id,
             on_event=on_event,
         )

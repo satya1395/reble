@@ -10,6 +10,10 @@
 - duckdb S3 credentials auto-configure from boto3's default chain
   (AWS_PROFILE / env / SSO) when `engines.duckdb.settings` is unset;
   manual settings take full responsibility. Values never logged.
+- `reble run --force`: rebuild the scope even when SQL hashes are
+  unchanged (reruns replace, never append). Docs now state plainly that
+  `incremental` means full-recompute today; watermark and partition
+  strategies, and date-range backfills, are roadmap items.
 
 ## 0.3.2
 
