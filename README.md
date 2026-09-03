@@ -15,18 +15,31 @@ date) or you cross your fingers on prod. Reble gives every change its own
 downstream closure — built on native Iceberg branch refs that cost nothing
 to create. Before anything reaches production, you see the row-level diff.
 
+## How it works
+
 ```mermaid
-flowchart LR
-    M[("main<br/>(Iceberg tables)")]
-    E["edited SQL"] -->|"scope: AST-changed ∪<br/>downstream closure"| RUN["reble run"]
-    M -->|"upstream inputs pinned<br/>via Iceberg tags"| RUN
-    RUN -->|"zero-copy branch refs"| B[("data branch")]
-    B --> D["reble diff<br/>rows + schema"]
-    D --> P{"reble promote"}
-    P -->|"pinned bases still<br/>equal main"| FF["fast-forward main"]
-    P -->|"drift"| RR["scoped re-run +<br/>fresh promote-time diff"]
-    RR --> FF
+flowchart TB
+    WHO["who triggers — cron · CI · Airflow · AI agents (MCP)"]
+    MODELS["your models — models/*.sql, plain SQL + a 3-line header"]
+    REBLE["Reble — SQLGlot lineage · scope · pin · run · diff · promote"]
+    ENGINE["compute — DuckDB (today), Spark (behind the same interface)"]
+    CAT["your Iceberg catalog — Glue · Polaris · Nessie · Hive · REST · sql"]
+    STORE[("your storage — S3 · GCS · local disk")]
+    WHO -->|"invokes one verb"| REBLE
+    MODELS --> REBLE
+    REBLE --> ENGINE
+    ENGINE -->|"branch refs · tag pins · snapshots"| CAT
+    CAT --> STORE
 ```
+
+Reble owns the *transformation* layer — models, lineage, execution,
+branching — the shape dbt-core has, without the templating or YAML. It
+does **not** own *scheduling*: cron or Airflow decides when; Reble is the
+step they run. And it's built on **native Iceberg branch refs** — a
+per-table Iceberg spec feature supported by any catalog (Glue, Polaris,
+Nessie, Hive, or any REST-compliant catalog). It is *not* a catalog and
+requires no new infrastructure. A branch ref is metadata-only: zero bytes
+are copied.
 
 ## Quick start
 
@@ -54,6 +67,57 @@ reble promote             # fast-forward if base is current; forced re-run with
 - See [how Reble compares](https://satya1395.github.io/reble/comparisons/)
   to lakeFS, Nessie, and warehouse clones.
 
+## The loop in detail
+
+```mermaid
+flowchart LR
+    M[("main<br/>(Iceberg tables)")]
+    E["edited SQL"] -->|"scope: AST-changed ∪<br/>downstream closure"| RUN["reble run"]
+    M -->|"upstream inputs pinned<br/>via Iceberg tags"| RUN
+    RUN -->|"zero-copy branch refs"| B[("data branch")]
+    B --> D["reble diff<br/>rows + schema"]
+    D --> P{"reble promote"}
+    P -->|"pinned bases still<br/>equal main"| FF["fast-forward main"]
+    P -->|"drift"| RR["scoped re-run +<br/>fresh promote-time diff"]
+    RR --> FF
+```
+
+- **Scoped branching** — scope = edited models ∪ downstream closure, capped
+  by `--depth`; `reble run --refresh` scopes by *data* movement instead
+  (nightly refreshes rebuild exactly what ingested).
+- **Pinned inputs** — upstream tables pinned with Iceberg **tags**
+  (`reble_pin__*`) at run time; tags block `expire_snapshots`, so branch
+  reads stay correct even while main moves.
+- **Row-level diffs** — computed on your compute via DuckDB, streaming
+  through `iceberg_scan` (out-of-core; spills under a configurable
+  `engines.duckdb.memory_limit`).
+- **Promote semantics** — fast-forward only when every pinned base still
+  equals current main; otherwise a scoped re-run and a fresh, promote-time
+  diff. The PR diff is advisory; the promote diff is authoritative.
+
+## Models are plain SQL
+
+**"Model" is just our word for one SQL file that creates one table.** If
+your team keeps a folder of SQLs and schedules them some way — a DAG, cron,
+an internal webapp — you already have models; point Reble at the folder.
+No orchestrator required, no dbt required: `models/**/*.sql`, one file is
+one model, the file stem is the table name, and a minimal header comment
+block carries the semantics:
+
+```sql
+-- model: mart_orders      (optional; defaults to file name)
+-- kind: table | view | incremental
+-- key: order_id           (diff key; required for incremental)
+select ... from stg_orders join raw_customers using (customer_id)
+```
+
+Lineage is parsed with SQLGlot: a table reference that matches another model
+is an edge; anything else is an upstream input, pinned with an Iceberg tag at
+run time. Cosmetic edits (whitespace, comments, casing) hash identically on
+the canonical AST and never trigger a run. Every branch snapshot carries
+provenance (`reble.model`, `reble.ast_hash`, `reble.run_id`) in its summary —
+"which code produced this table state" is answered from the catalog itself.
+
 ## Runs itself — no manual runs required
 
 The verbs are idempotent and the exit codes are a contract, so any job can
@@ -80,67 +144,6 @@ jobs:
 PRs get the same treatment: `reble status` exits 3 on drift and
 `reble diff` prints the row-level consequences — cheap checks to wire into
 any CI.
-
-## Models are plain SQL
-
-**"Model" is just our word for one SQL file that creates one table.** If
-your team keeps a folder of SQLs and schedules them some way — a DAG, cron,
-an internal webapp — you already have models; point Reble at the folder.
-No orchestrator required, no dbt required: `models/**/*.sql`, one file is
-one model, the file stem is the table name, and a minimal header comment
-block carries the semantics:
-
-```sql
--- model: mart_orders      (optional; defaults to file name)
--- kind: table | view | incremental
--- key: order_id           (diff key; required for incremental)
-select ... from stg_orders join raw_customers using (customer_id)
-```
-
-Lineage is parsed with SQLGlot: a table reference that matches another model
-is an edge; anything else is an upstream input, pinned with an Iceberg tag at
-run time. Cosmetic edits (whitespace, comments, casing) hash identically on
-the canonical AST and never trigger a run. Every branch snapshot carries
-provenance (`reble.model`, `reble.ast_hash`, `reble.run_id`) in its summary —
-"which code produced this table state" is answered from the catalog itself.
-
-## How it works
-
-```mermaid
-flowchart TB
-    WHO["who triggers — cron · CI · Airflow · AI agents (MCP)"]
-    MODELS["your models — models/*.sql, plain SQL + a 3-line header"]
-    REBLE["Reble — SQLGlot lineage · scope · pin · run · diff · promote"]
-    ENGINE["compute — DuckDB (today), Spark (behind the same interface)"]
-    CAT["your Iceberg catalog — Glue · Polaris · Nessie · Hive · REST · sql"]
-    STORE[("your storage — S3 · GCS · local disk")]
-    WHO -->|"invokes one verb"| REBLE
-    MODELS --> REBLE
-    REBLE --> ENGINE
-    ENGINE -->|"branch refs · tag pins · snapshots"| CAT
-    CAT --> STORE
-```
-
-Reble owns the *transformation* layer — models, lineage, execution,
-branching — the shape dbt-core has, without the templating or YAML. It
-does **not** own *scheduling*: cron or Airflow decides when; Reble is the
-step they run. And it's built on **native Iceberg branch refs** — a per-table Iceberg spec
-feature supported by any catalog (Glue, Polaris, Nessie, Hive, or any
-REST-compliant catalog). It is *not* a catalog and requires no new
-infrastructure. A branch ref is metadata-only: zero bytes are copied.
-
-- **Scoped branching** — scope = edited models ∪ downstream closure, capped
-  by `--depth`; `reble run --refresh` scopes by *data* movement instead
-  (nightly refreshes rebuild exactly what ingested).
-- **Pinned inputs** — upstream tables pinned with Iceberg **tags**
-  (`reble_pin__*`) at run time; tags block `expire_snapshots`, so branch
-  reads stay correct even while main moves.
-- **Row-level diffs** — computed on your compute via DuckDB, streaming
-  through `iceberg_scan` (out-of-core; spills under a configurable
-  `engines.duckdb.memory_limit`).
-- **Promote semantics** — fast-forward only when every pinned base still
-  equals current main; otherwise a scoped re-run and a fresh, promote-time
-  diff. The PR diff is advisory; the promote diff is authoritative.
 
 ## Agents (MCP)
 
