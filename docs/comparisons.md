@@ -58,6 +58,40 @@ build my warehouse," Reble answers "how do I change it safely." There's no
 dbt dependency anywhere in Reble; a dbt project's SQL is a migration story
 ("point Reble at your models directory"), not a requirement.
 
+## Why not a dbt extension?
+
+Because the model contract is the product, and they're incompatible.
+
+Reble models are plain SQL — parseable, AST-hashable, zero-config. Scope
+inference (what changed, what's downstream) works in milliseconds because
+SQLGlot reads the SQL directly. dbt models are Jinja templates plus YAML —
+not parseable until after `dbt compile`, which means every scope check
+carries the full dbt runtime (project, profiles, macros) as a dependency.
+
+Branching also requires table-format control that dbt deliberately
+abstracts away. Reble's core is native Iceberg branch refs, tag-based
+pinning, and CTAS-on-branch-ref writes with provenance in every snapshot.
+dbt's adapter model exists to *hide* the table format — retrofitting
+branch refs into that is a fork, not an extension.
+
+And the market is bigger than dbt. A dbt extension serves dbt shops.
+Reble serves dbt shops (your SQL ports almost unchanged — remove `ref()`
+calls, keep the SQL), plus the SQL+Airflow teams, plus the teams with
+internal webapps. Three audiences, one engine.
+
+| | dbt extension | Reble standalone |
+| --- | --- | --- |
+| Model format | Jinja + YAML | plain SQL |
+| Scope inference | after `dbt compile` | direct SQLGlot parse |
+| Dependencies | dbt-core, profiles, macros | none beyond SQL files |
+| Table format control | through adapter abstraction | direct Iceberg |
+| Serves | dbt teams | dbt + SQL + webapp teams |
+| Complexity surface | dbt's entire stack | the SQL file |
+
+**The one-sentence version:** a dbt extension would be branching bolted
+onto a complex stack; Reble is branching built into a simple one — and
+the simplicity is the product.
+
 ## Summary
 
 | | Reble | lakeFS | Nessie | Warehouse clones |
