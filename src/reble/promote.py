@@ -128,8 +128,18 @@ class Promoter:
 
     @staticmethod
     def _save_record(path: Path, record: PromoteRecord) -> None:
+        import os
+        import tempfile
+
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(record.to_dict(), indent=2))
+        fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(json.dumps(record.to_dict(), indent=2))
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
 
 
 def orphan_pin_tags(catalog, cfg, active_tags: set[str]) -> list[tuple[str, str]]:

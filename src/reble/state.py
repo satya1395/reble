@@ -62,6 +62,18 @@ class StateStore:
         return State(branches=branches)
 
     def save(self, state: State) -> None:
+        """Atomic write (tmp + rename) so a crash mid-save can never leave
+        a truncated state.json — the file readers see is always complete."""
+        import os
+        import tempfile
+
         self.reble_dir.mkdir(parents=True, exist_ok=True)
         data = {"branches": {k: asdict(v) for k, v in state.branches.items()}}
-        self.path.write_text(json.dumps(data, indent=2))
+        fd, tmp = tempfile.mkstemp(dir=self.reble_dir, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(json.dumps(data, indent=2))
+            os.replace(tmp, self.path)  # atomic on POSIX and Windows
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)

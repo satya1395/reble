@@ -150,29 +150,51 @@ And the review artifact is the thing reviewers actually want: the gate's
 `reble diff` shows the exact rows the change adds, removes, and modifies
 — not a wall of SQL.
 
-## Where the state lives (and what your DAG needs to know)
+## `.reble/` in production Airflow
 
-Nothing. Your DAG knows one command; every piece of branch-and-pin state
-Reble needs lives in places Reble already manages:
+On your laptop, `.reble/` is just a folder next to `reble.yml`. In
+Airflow it needs one decision: **where does that folder live?** The
+three shapes, honestly:
 
-- **The Iceberg catalog** — branch refs, pin tags, snapshots, and the
-  provenance written into each snapshot's summary. Durable, shared, and
-  the source of truth for `--refresh` scope (stale = upstream snapshot
-  newer than yours, by timestamp — read from the catalog at run time).
-- **`.reble/` on the worker** — the machine-local layer: change-set ↔
-  data-branch mappings, run hashes, promote progress. This is what makes
-  retries resume rather than restart.
+**1. Fixed worker with persistent disk** (a VM, a dedicated Celery
+worker, a long-running ECS task): nothing to do. The project directory
+and its `.reble/` live on the worker's disk; state survives restarts.
 
-The practical consequence for Airflow:
+**2. Ephemeral pods** (KubernetesExecutor, autoscaling groups, CI
+runners): mount the project directory — *including* `.reble/` — from
+persistent storage (a PVC, EFS, or whatever your platform gives you) so
+tasks share it:
 
-- **Scheduled refreshes are ephemeral-worker-safe.** `reble run --refresh`
-  derives its scope entirely from catalog snapshots; a fresh container
-  with no `.reble/` history runs it correctly.
-- **Promotion and multi-task workflows want persistent `.reble/`.**
-  Promote's resume-across-retries lives in state on disk. On
-  KubernetesExecutor or autoscaling workers, put `.reble/` on a small
-  persistent volume (or a shared mount per warehouse project) so a
-  retried promote picks up where the first attempt died.
+```yaml
+volumeMounts:
+  - name: warehouse
+    mountPath: /srv/warehouse     # reble.yml, models/, .reble/
+volumes:
+  - name: warehouse
+    persistentVolumeClaim: { claimName: reble-warehouse }
+```
+
+**3. No persistence at all** (each task gets a fresh checkout): still
+works for `reble run --refresh` — scope comes entirely from the catalog,
+not local state. What you lose: promote-resume-across-retries and
+change-set continuity between tasks. Fine for nightly refresh-only DAGs;
+not fine for the gated-promotion pattern.
+
+**Concurrency, stated plainly:** one change-set runs one verb at a time.
+Different DAGs are naturally separated — give each `REBLE_CHANGE_SET`
+(its own key, its own data branch) — but two concurrent tasks on the
+*same* change-set will race. Serialize within a DAG (Airflow does this
+natively with task dependencies); across DAGs sharing a warehouse, use
+different change-sets. Distributed locking is on the roadmap for teams
+that need same-key parallelism.
+
+What lives where, for reference:
+
+- **Iceberg catalog** (durable, shared, worker-agnostic): branch refs,
+  pin tags, snapshots, provenance — and the snapshot timestamps that
+  `--refresh` scopes from.
+- **`.reble/` on the worker** (needs the decision above): change-set ↔
+  data-branch mappings, run hashes, promote progress, duckdb spill.
 
 ## Setup notes
 
