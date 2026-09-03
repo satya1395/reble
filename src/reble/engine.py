@@ -20,7 +20,7 @@ from sqlglot import exp
 
 from .duckio import DuckIo
 from .errors import RebleError
-from .lineage import ModelNode, ast_hash, parse_model_sql
+from .lineage import ModelNode, ast_hash, parse_model_sql, table_refs
 from .relations import relation_id, resolve_input_snapshot, table_for_model
 from .sparkio import SparkIo
 
@@ -122,8 +122,7 @@ class SparkEngine:
 
     def _build_query(self, spark, model, tree, graph, branch, base_ref, pin_tag, pin_inputs) -> str:
         view_for: dict[str, str] = {}
-        for node in tree.find_all(exp.Table):
-            ref = node.name
+        for ref in table_refs(tree):
             if ref in view_for or ref == model.name:
                 continue
             rel_model = graph.models.get(ref)
@@ -264,10 +263,9 @@ class DuckDbEngine:
     def _register_inputs(
         self, con, model, tree, graph, branch, base_ref, pin_tag, pin_inputs
     ) -> dict[str, str]:
-        """Resolve every distinct table ref to a registered DuckDB view."""
+        """Resolve every distinct external table ref to a registered DuckDB view."""
         view_for: dict[str, str] = {}
-        for node in tree.find_all(exp.Table):
-            ref = node.name
+        for ref in table_refs(tree):
             if ref in view_for or ref == model.name:
                 continue
             rel_model = graph.models.get(ref)

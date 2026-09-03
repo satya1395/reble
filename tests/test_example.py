@@ -63,4 +63,4 @@ def test_example_walkthrough(tmp_path, monkeypatch):
     cfg = _yaml.safe_load((work / "reble.yml").read_text())
     cat = load_catalog("reble", **cfg["warehouse"]["catalog"])
     rows = cat.load_table("analytics.mart_orders").scan().to_arrow().to_pylist()
-    assert [r["order_id"] for r in rows] == [2, 3]
+    assert sorted(r["order_id"] for r in rows) == [2, 3]

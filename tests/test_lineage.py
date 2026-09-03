@@ -98,3 +98,19 @@ def test_ast_hash_quoted_identifiers_are_case_sensitive():
 def test_parse_header_stops_at_first_non_comment():
     header = parse_header("-- model: x\n\n-- later: ignored? no, still comment\nselect 1")
     assert header["model"] == "x"
+
+
+def test_cte_names_are_not_upstream_tables():
+    """A CTE reference (`with x as (...) select * from x`) is not an input
+    table — regression: models with CTEs failed with 'input not found'."""
+    from reble.lineage import build_graph, table_refs
+    from reble.lineage import parse_model_sql
+    import pathlib
+
+    tree = parse_model_sql(
+        "with latest as (select *, row_number() over "
+        "(partition by id order by ts desc) as rn from raw_events) "
+        "select id from latest where rn = 1",
+        "duckdb",
+    )
+    assert table_refs(tree) == ["raw_events"]

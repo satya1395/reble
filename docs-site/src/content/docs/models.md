@@ -8,10 +8,48 @@ already have models.
 
 ## Plain SQL, three optional lines
 
-```sql
+Real models from the runnable
+[orders-lakehouse example](https://github.com/satya1395/reble/tree/main/examples/orders-lakehouse) —
+CTEs, window functions, casts, whatever your SQL needs:
+
+```sql title="models/stg_orders.sql"
 -- kind: table
 -- key: order_id
-select * from raw_events where amount > 10
+-- Upstream input (not a model): raw_events, where ingestion lands events
+-- as they arrive — duplicates and all.
+with latest as (
+    select
+        *,
+        row_number() over (partition by order_id order by event_ts desc) as _rn
+    from raw_events
+),
+typed as (
+    select
+        cast(order_id as bigint)               as order_id,
+        cast(user_id as bigint)                as user_id,
+        lower(status)                          as status,
+        cast(amount as decimal(12, 2))         as amount,
+        cast(event_ts as timestamp)            as event_ts
+    from latest
+    where _rn = 1
+)
+select *
+from typed
+where status = 'paid'
+  and amount > 0
+```
+
+```sql title="models/mart_orders.sql"
+-- kind: table
+-- key: order_id
+select
+    order_id,
+    user_id,
+    amount,
+    round(amount * 0.0825, 2)            as tax_amount,
+    round(amount + amount * 0.0825, 2)   as total_with_tax,
+    date_trunc('day', event_ts)          as order_date
+from stg_orders
 ```
 
 The comment header is the only metadata Reble asks for, and even it is

@@ -74,13 +74,41 @@ table, and the file name is the table name:
 cat > models/stg_orders.sql <<'EOF'
 -- kind: table
 -- key: order_id
-select * from raw_events where amount > 10
+-- Upstream input (not a model): raw_events, where ingestion lands events
+-- as they arrive.
+with latest as (
+    select
+        *,
+        row_number() over (partition by order_id order by event_ts desc) as _rn
+    from raw_events
+),
+typed as (
+    select
+        cast(order_id as bigint)               as order_id,
+        cast(user_id as bigint)                as user_id,
+        lower(status)                          as status,
+        cast(amount as decimal(12, 2))         as amount,
+        cast(event_ts as timestamp)            as event_ts
+    from latest
+    where _rn = 1
+)
+select *
+from typed
+where status = 'paid'
+  and amount > 10
 EOF
 
 cat > models/mart_orders.sql <<'EOF'
 -- kind: table
 -- key: order_id
-select order_id, amount, amount * 2 as amount_doubled from stg_orders
+select
+    order_id,
+    user_id,
+    amount,
+    round(amount * 0.0825, 2)            as tax_amount,
+    round(amount + amount * 0.0825, 2)   as total_with_tax,
+    date_trunc('day', event_ts)          as order_date
+from stg_orders
 EOF
 ```
 
@@ -109,7 +137,7 @@ ingestion normally lands. Create a file named `seed.py` in the project
 folder:
 
 ```python title="seed.py"
-import os
+import datetime as dt
 
 import pyarrow as pa
 import yaml
@@ -126,10 +154,26 @@ ns = cfg["warehouse"]["namespace"]
 cat.create_namespace_if_not_exists(ns)
 cat.create_table(
     f"{ns}.raw_events",
-    schema=pa.schema([("order_id", pa.int64()), ("amount", pa.float64())]),
+    schema=pa.schema([
+        ("order_id", pa.int64()),
+        ("user_id", pa.int64()),
+        ("status", pa.string()),
+        ("amount", pa.float64()),
+        ("event_ts", pa.timestamp("us")),
+    ]),
 ).append(pa.table({
     "order_id": [1, 2, 3, 4, 5, 6],
-    "amount": [5.0, 15.0, 25.0, 8.0, 30.0, 12.0],
+    "user_id":  [101, 102, 103, 104, 105, 106],
+    "status":   ["paid", "paid", "paid", "pending", "paid", "paid"],
+    "amount":   [5.0, 15.0, 25.0, 8.0, 30.0, 12.0],
+    "event_ts": [
+        dt.datetime(2026, 9, 1, 14, 22, 5),
+        dt.datetime(2026, 9, 1, 15, 2, 41),
+        dt.datetime(2026, 9, 2, 9, 14, 33),
+        dt.datetime(2026, 9, 2, 10, 44, 18),
+        dt.datetime(2026, 9, 3, 18, 3, 47),
+        dt.datetime(2026, 9, 3, 19, 58, 22),
+    ],
 }))
 print(f"seeded {ns}.raw_events: 6 rows")
 ```
@@ -168,7 +212,7 @@ didn't configure it). `main` — production — now has your tables.
 ## Step 4: change a model — production stays untouched
 
 Now the part you came for. Edit `models/stg_orders.sql`: change
-`amount > 10` to `amount > 25`. Then:
+`amount > 10` to `amount > 20`. Then:
 
 ```bash
 reble run
@@ -183,8 +227,11 @@ main never knew.
 `reble diff` shows what your change produced — **rows, not SQL**:
 
 ```
-analytics_test.mart_orders:  +2 -0 ~0  (keys: ['order_id'])
+analytics_test.mart_orders:  +0 -2 ~0  (2 unchanged)
 ```
+
+Two orders fell below the new threshold — you see exactly which rows
+leave production before anything moves.
 
 This is your review artifact before anything reaches production.
 

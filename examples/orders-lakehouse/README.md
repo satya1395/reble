@@ -5,10 +5,10 @@ your machine: sqlite-backed catalog, file-based warehouse, DuckDB compute.
 No S3, no credentials, no Docker.
 
 ```
-raw_events (upstream input, seeded)
-   └── stg_orders          (table,  key: order_id)
-         └── mart_orders   (table,  key: order_id)
-               └── report_daily (view)
+raw_events (upstream input, seeded: order events as they land)
+   └── stg_orders          (dedupe + types + paid filter)
+         └── mart_orders   (per-order amounts: tax, totals, order date)
+               └── report_daily (view: daily counts and revenue)
 ```
 
 ## Setup
@@ -33,7 +33,7 @@ tracks model hashes and derives scope itself.
 ## The loop you came for
 
 ```bash
-# a real change: only keep orders above a threshold
+# a real change: raise the minimum-order threshold
 $EDITOR models/stg_orders.sql     # change  amount > 0  to  amount > 15
 
 reble run                          # scope: stg_orders + downstream closure

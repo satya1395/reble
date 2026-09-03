@@ -23,10 +23,26 @@ def main() -> None:
 
     table = catalog.create_table(
         f"{namespace}.raw_events",
-        schema=pa.schema([("order_id", pa.int64()), ("amount", pa.float64())]),
+        schema=pa.schema([
+            ("order_id", pa.int64()),
+            ("user_id", pa.int64()),
+            ("status", pa.string()),
+            ("amount", pa.float64()),
+            ("event_ts", pa.timestamp("us")),
+        ]),
     )
     table.append(
-        pa.table({"order_id": [1, 2, 3], "amount": [10.0, 20.0, 30.0]})
+        pa.table({
+            "order_id": [1, 2, 3],
+            "user_id":  [101, 102, 103],
+            "status":   ["paid", "paid", "paid"],
+            "amount":   [10.0, 20.0, 30.0],
+            "event_ts": [
+                __import__("datetime").datetime(2026, 8, 30, 14, 22, 5),
+                __import__("datetime").datetime(2026, 8, 31, 9, 14, 33),
+                __import__("datetime").datetime(2026, 9, 1, 18, 3, 47),
+            ],
+        })
     )
     rows = catalog.load_table(f"{namespace}.raw_events").scan().to_arrow()
     print(f"seeded {namespace}.raw_events: {rows.num_rows} rows on main")

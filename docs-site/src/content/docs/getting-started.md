@@ -31,13 +31,41 @@ that produces one table, and the file name is the table name:
 ```sql title="models/stg_orders.sql"
 -- kind: table
 -- key: order_id
-select * from raw_events where amount > 0
+-- Upstream input (not a model): raw_events, where ingestion lands events
+-- as they arrive.
+with latest as (
+    select
+        *,
+        row_number() over (partition by order_id order by event_ts desc) as _rn
+    from raw_events
+),
+typed as (
+    select
+        cast(order_id as bigint)               as order_id,
+        cast(user_id as bigint)                as user_id,
+        lower(status)                          as status,
+        cast(amount as decimal(12, 2))         as amount,
+        cast(event_ts as timestamp)            as event_ts
+    from latest
+    where _rn = 1
+)
+select *
+from typed
+where status = 'paid'
+  and amount > 0
 ```
 
 ```sql title="models/mart_orders.sql"
 -- kind: table
 -- key: order_id
-select order_id, amount * 2 as amount_doubled from stg_orders
+select
+    order_id,
+    user_id,
+    amount,
+    round(amount * 0.0825, 2)            as tax_amount,
+    round(amount + amount * 0.0825, 2)   as total_with_tax,
+    date_trunc('day', event_ts)          as order_date
+from stg_orders
 ```
 
 Write the project config and seed the upstream input table:
@@ -47,6 +75,8 @@ reble init --catalog sql --namespace analytics
 ```
 
 ```python title="seed.py"
+import datetime as dt
+
 import pyarrow as pa, yaml
 from pyiceberg.catalog import load_catalog
 
@@ -55,8 +85,22 @@ cat = load_catalog("reble", **cfg["warehouse"]["catalog"])
 cat.create_namespace_if_not_exists("analytics")
 cat.create_table(
     "analytics.raw_events",
-    schema=pa.schema([("order_id", pa.int64()), ("amount", pa.float64())]),
-).append(pa.table({"order_id": [1, 2, 3], "amount": [10.0, 20.0, 30.0]}))
+    schema=pa.schema([
+        ("order_id", pa.int64()),
+        ("user_id", pa.int64()),
+        ("status", pa.string()),
+        ("amount", pa.float64()),
+        ("event_ts", pa.timestamp("us")),
+    ]),
+).append(pa.table({
+    "order_id": [1, 2, 3],
+    "user_id":  [101, 102, 103],
+    "status":   ["paid", "paid", "paid"],
+    "amount":   [10.0, 20.0, 30.0],
+    "event_ts": [dt.datetime(2026, 8, 30, 14, 22, 5),
+                 dt.datetime(2026, 8, 31, 9, 14, 33),
+                 dt.datetime(2026, 9, 1, 18, 3, 47)],
+}))
 ```
 
 ```bash
@@ -78,7 +122,7 @@ $EDITOR models/stg_orders.sql     # amount > 0  →  amount > 15
 
 reble run        # scope inferred: stg_orders + everything downstream
 reble diff mart_orders
-#   analytics.mart_orders:  +2 -0 ~0  (keys: order_id)
+#   analytics.mart_orders:  +2 -0 ~0  (order 1 drops below the filter)
 reble status     # clean — nothing drifted
 reble promote    # fast-forward main; verify: the rows are there
 ```
@@ -99,7 +143,11 @@ from pyiceberg.catalog import load_catalog
 cfg = yaml.safe_load(open("reble.yml"))
 cat = load_catalog("reble", **cfg["warehouse"]["catalog"])
 cat.load_table("analytics.raw_events").append(
-    pa.table({"order_id": [4], "amount": [40.0]}))
+    pa.table({
+        "order_id": [4], "user_id": [104], "status": ["paid"],
+        "amount": [40.0],
+        "event_ts": [__import__("datetime").datetime(2026, 9, 2, 11, 0, 0)],
+    }))
 PY
 ```
 

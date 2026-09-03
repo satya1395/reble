@@ -80,8 +80,17 @@ def _canonicalize(tree: exp.Expression) -> exp.Expression:
 
 
 def table_refs(tree: exp.Expression) -> list[str]:
-    """All table references in the AST, as written (last segment = name)."""
-    return [t.name for t in tree.find_all(exp.Table) if t.name]
+    """All external table references in the AST, as written (last segment).
+
+    CTE names are excluded — a `with latest as (...)` followed by
+    `from latest` is a reference to the CTE, not to an upstream table.
+    """
+    ctes = {cte.alias_or_name for cte in tree.find_all(exp.CTE)}
+    return [
+        t.name
+        for t in tree.find_all(exp.Table)
+        if t.name and t.name not in ctes
+    ]
 
 
 @dataclass
