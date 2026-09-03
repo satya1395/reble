@@ -20,10 +20,13 @@ python3.13 -m venv reble-test && source reble-test/bin/activate
 ### 2. Install Reble (the right version)
 
 ```bash
-pip install 'reble[aws]==0.6.0'
-reble --version    # must say 0.5.0 — if it says 0.1.1, force-reinstall:
-# pip install --force-reinstall 'reble[aws]==0.6.0'
+pip install 'reble[aws]'
+reble --version
 ```
+
+If the version looks older than the one on
+[PyPI](https://pypi.org/project/reble/), you have a cached package:
+`pip install --force-reinstall 'reble[aws]'`.
 
 ### 3. An AWS profile that works
 
@@ -278,8 +281,8 @@ landed. The full pattern book is in the [Airflow guide](airflow.md).
 
 ## Troubleshooting
 
-- **`reble --version` says 0.1.1** — old cached package. Force-reinstall:
-  `pip install --force-reinstall 'reble[aws]==0.6.0'`
+- **`reble --version` looks old** — cached package. Force-reinstall:
+  `pip install --force-reinstall 'reble[aws]'`
 - **`You must specify a region`** — set `export AWS_DEFAULT_REGION=us-east-1`,
   or put `region` under the catalog in `reble.yml` (translated to
   `glue.region` automatically since 0.5.1)
@@ -288,5 +291,8 @@ landed. The full pattern book is in the [Airflow guide](airflow.md).
 - **`ACCESS_DENIED` on S3** — the bucket policy doesn't allow your IAM
   user/role to write. Use a bucket you own or update the policy.
 - **`input 'raw_events' not found`** — run `seed.py` first (Step 2)
-- **`No such option '--refresh'`** — you have the old package version;
+- **`No such option '--refresh'`** — you have an old package version;
   see the first item above.
+
+Exit codes (`3` drift, `4` promote blocked, `7` missing diff key) are not
+AWS-specific — see [Exit codes and JSON output](/reble/exit-codes/).

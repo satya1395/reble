@@ -42,13 +42,13 @@ in the `analytics` namespace.* Flags:
 
 | Flag | Meaning |
 | --- | --- |
-| `--catalog TYPE` | Where tables are registered. `sql` = local SQLite-backed, zero infra. `glue`, `hive`, `rest`, `polaris`, `nessie` = infrastructure you already run — [which to pick](config.md#which-catalog-type). |
+| `--catalog TYPE` | Where tables are registered. Default `rest`. `sql` = local SQLite-backed, zero infra. `glue`, `hive`, `rest`, `polaris`, `nessie`, `reble` = infrastructure you already run — [which to pick](/reble/config/#which-catalog-type). |
 | `--namespace NAME` | The schema-like prefix for model tables (`stg_orders` → `analytics.stg_orders`). |
-| `--engine duckdb\|spark` | Which engine `compute_policy` prefers. |
-| `--state local\|postgres` | Where Reble keeps its own state (see [state](config.md#state)). |
+| `--engine duckdb\|spark` | Which engine `compute_policy` prefers. Default `duckdb`. |
 | `--yes` / `-y` | Skip confirmation. |
 
-For shared state (multiple workers, CI runners, Airflow):
+`init` does not write a `state:` block. For shared state (multiple workers,
+CI runners, Airflow), add one to `reble.yml` yourself:
 
 ```yaml
 state:
@@ -57,7 +57,7 @@ state:
 ```
 
 Requires `pip install 'reble[postgres]'`; validated at startup (exit 2
-if unreachable).
+if unreachable). See [state](/reble/config/#state).
 
 Exits `2` if the catalog is unreachable.
 
@@ -85,7 +85,7 @@ reble run --engine spark         # one-off engine override
 | `--depth N` | Cap the downstream cascade; models cut off are reported as stale. |
 | `--dry-run` | Preflight only: scope, branch plan, pin plan. Writes nothing. |
 | `--engine duckdb\|spark` | Override `compute_policy.prefer` for this run. |
-| `--change-set ID` | Key the work by this id (else git branch → `REBLE_CHANGE_SET` → `local`). |
+| `--change-set ID` | Key the work by this id. Precedence: this flag → `REBLE_CHANGE_SET` → the git branch. With `git_sync: false` and none of these, the key is `local`; with `git_sync: true` and no git branch, Reble exits `2`. |
 | `--branch NAME` | Resume an existing data branch under this change-set. |
 | `--events` | Stream `run.model.begin` / `run.model.end` NDJSON events on stdout (implies `--json`). |
 
@@ -168,31 +168,70 @@ reble estimate --refresh         # for the data-driven scope
 ```
 
 Reports estimated bytes read and rows per scope table and pinned input.
-Honest about being rough (spec: accurate estimation is a non-goal).
+The numbers come from Iceberg snapshot summaries, so they are as accurate as
+those summaries and no more — accurate estimation is an explicit non-goal.
+
+| Flag | Meaning |
+| --- | --- |
+| `--models a,b` | Estimate this explicit scope instead of the inferred one. |
+| `--depth N` | Cap the downstream cascade, as `run` does. |
+| `--refresh` | Estimate the data-driven scope (`run --refresh`). |
+| `--change-set ID` | Key the work by this id. |
+| `--branch NAME` | Use an existing data branch. |
 
 ## reble branch
 
-```bash
-reble branch create staging --from main   # explicit data branch
-reble branch list                         # branches + age + change-set
-reble branch show <name>                  # refs, pins, scope, last run
-```
+Explicit branch management. Required when `branching.git_sync` is `false`;
+optional otherwise, since `run` creates the data branch for you.
 
-`branch create` is the branch-first gesture: create a data branch before
-any model changes (invariant 5 — an empty scope is legal). `--change-set`
-registers an id for it. Branch names are sanitized
-(`branching.name_sanitization`) and disambiguated if the ref already
-exists on the tables.
-
-## reble discard
-
-Drop the change-set's branch and its pins. The other half of
-promote-or-discard — there is no merge.
+### reble branch create
 
 ```bash
-reble discard                    # current change-set
-reble discard --change-set ID
+reble branch create staging               # explicit data branch
+reble branch create staging --from main   # fork from a specific ref
 ```
+
+The branch-first gesture: create a data branch before any model changes
+(invariant 5 — an empty scope is legal). Branch names are sanitized
+(`branching.name_sanitization`) and disambiguated if the ref already exists
+on the tables.
+
+| Flag | Meaning |
+| --- | --- |
+| `--from REF` | Ref to fork from (default: `warehouse.default_base`). |
+| `--change-set ID` | Register a change-set id for the new branch. |
+
+### reble branch list
+
+```bash
+reble branch list
+```
+
+Lists the data branches Reble knows about. Metadata only — it does not open
+a compute engine.
+
+### reble branch show
+
+```bash
+reble branch show fix-orders
+```
+
+Catalog refs whose name contains the argument: the branch ref on each table
+carrying it, plus that branch's pin tags, each with the snapshot it points
+at. Matching is a substring match on the ref name, so a short name matches
+broadly. It reports catalog state only — not local run state.
+
+### reble branch discard
+
+Drop a branch's refs and its pin tags. The other half of promote-or-discard
+— there is no merge. Refuses if a promote is in progress for that branch.
+
+```bash
+reble branch discard fix-orders          # prompts for confirmation
+reble branch discard fix-orders --yes    # non-interactive
+```
+
+The branch name is required; there is no "current change-set" default.
 
 ## reble gc
 
@@ -201,12 +240,22 @@ Clean up correctness-critical debris: expired branches and their pin tags.
 ```bash
 reble gc                         # expire branches older than ttl_days
 reble gc --before 7              # custom age
+reble gc --dry-run               # list what would be dropped
 ```
 
-Runs the sequence in the safe order: fast-forward anything promotable that
-is a strict descendant of main, discard the rest, drop pin tags so
-`expire_snapshots` can reclaim data files. Without this, orphaned pin tags
-silently block snapshot expiry on production tables.
+| Flag | Meaning |
+| --- | --- |
+| `--before DAYS` | Expire branches older than this instead of `branching.ttl_days`. |
+| `--dry-run` | Report the branches and tags that would be dropped; change nothing. |
+
+Two things, and only these two: expire branches older than
+`branching.ttl_days`, and drop pin tags left behind by branches that are
+gone. It does not promote anything and it does not touch live branches.
+
+Dropping orphan pin tags is the correctness-critical half. A pin tag blocks
+`expire_snapshots` on the table it points at, so a discarded branch whose
+tags linger would prevent a production table from ever reclaiming data
+files.
 
 ## reble mcp
 

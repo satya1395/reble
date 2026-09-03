@@ -543,6 +543,7 @@ def branch_list(
     quiet: bool = typer.Option(False, "--quiet"),
     config_path: Path | None = typer.Option(None, "--config"),
 ):
+    """List known data branches. Metadata only — no engine is opened."""
     core = _core(config_path, profile)
     _emit(_invoke(core.branch_list, json_output), json_output)
 
@@ -556,7 +557,7 @@ def branch_show(
     quiet: bool = typer.Option(False, "--quiet"),
     config_path: Path | None = typer.Option(None, "--config"),
 ):
-    """Catalog refs + pin tags + local state for one branch."""
+    """Catalog refs matching this name: the branch ref per table, plus its pin tags."""
     core = _core(config_path, profile)
     _emit(_invoke(core.branch_show, json_output, name), json_output)
 

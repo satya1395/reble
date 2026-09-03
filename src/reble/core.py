@@ -901,7 +901,7 @@ class Reble:
         return envelope.envelope("branch list", ok=True, data={"branches": branches})
 
     def branch_show(self, name: str) -> dict:
-        """Catalog refs + pin tags + local state for one branch."""
+        """Catalog refs whose name matches: the branch ref on each table, plus its pin tags."""
         refs: list[dict] = []
         for table_id in list_tables(self.catalog):
             try:
