@@ -150,6 +150,30 @@ And the review artifact is the thing reviewers actually want: the gate's
 `reble diff` shows the exact rows the change adds, removes, and modifies
 — not a wall of SQL.
 
+## Where the state lives (and what your DAG needs to know)
+
+Nothing. Your DAG knows one command; every piece of branch-and-pin state
+Reble needs lives in places Reble already manages:
+
+- **The Iceberg catalog** — branch refs, pin tags, snapshots, and the
+  provenance written into each snapshot's summary. Durable, shared, and
+  the source of truth for `--refresh` scope (stale = upstream snapshot
+  newer than yours, by timestamp — read from the catalog at run time).
+- **`.reble/` on the worker** — the machine-local layer: change-set ↔
+  data-branch mappings, run hashes, promote progress. This is what makes
+  retries resume rather than restart.
+
+The practical consequence for Airflow:
+
+- **Scheduled refreshes are ephemeral-worker-safe.** `reble run --refresh`
+  derives its scope entirely from catalog snapshots; a fresh container
+  with no `.reble/` history runs it correctly.
+- **Promotion and multi-task workflows want persistent `.reble/`.**
+  Promote's resume-across-retries lives in state on disk. On
+  KubernetesExecutor or autoscaling workers, put `.reble/` on a small
+  persistent volume (or a shared mount per warehouse project) so a
+  retried promote picks up where the first attempt died.
+
 ## Setup notes
 
 - Install Reble on workers or in the image: `pip install reble`

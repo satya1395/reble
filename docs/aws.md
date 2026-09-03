@@ -249,9 +249,12 @@ ingest >> BashOperator(
 
 Install `reble[aws]` in the worker image, pass credentials the way you
 already do (profile, role, or env vars — the standard chain), and the
-refresh scopes itself from whatever the ingest just landed. The full
-pattern book — fail-mid-run behavior, promotion as a gated deploy step,
-task-per-model — is in the [Airflow guide](airflow.md).
+refresh scopes itself from whatever the ingest just landed. The DAG
+needs no branch or pin knowledge — that state lives in the catalog
+(refs, tags, snapshots) and in `.reble/` on the worker, and the refresh
+reads it at run time. The full pattern book — fail-mid-run behavior,
+promotion as a gated deploy step, where state lives — is in the
+[Airflow guide](airflow.md).
 
 ## Troubleshooting
 
