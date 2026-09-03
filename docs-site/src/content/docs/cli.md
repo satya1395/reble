@@ -1,6 +1,6 @@
 ---
 title: "CLI reference"
-description: "Every command, flag, and exit code."
+description: "Every command, flag, envelope, and exit code."
 ---
 Every command accepts the global flags `--config PATH`, `--profile NAME`,
 `--json`, `--no-color`, `--quiet`. Machine consumers: `--json` emits the
@@ -8,8 +8,24 @@ stable envelope (SPEC §6), and `run`/`diff` accept `--events` for versioned
 NDJSON progress. Exit codes are a contract (SPEC §8) — the common ones are
 noted per command.
 
-Normative detail, including the `reble.yml` schema and envelope shape, is in
-[`SPEC.md`](https://github.com/satya1395/reble/blob/main/SPEC.md).
+Normative detail, including the envelope shape, is in
+[`SPEC.md`](https://github.com/satya1395/reble/blob/main/SPEC.md). The
+[`reble.yml` schema](config.md) has its own page.
+
+## Global flags
+
+| Flag | Meaning |
+| --- | --- |
+| `--config PATH` | Use this `reble.yml` instead of the one in the current directory. |
+| `--profile NAME` | Apply a profile from `reble.yml` (or set `REBLE_PROFILE`). |
+| `--json` | Emit the stable JSON envelope instead of text. Implied by `--events`. |
+| `--no-color` | Strip ANSI colors (CI logs). |
+| `--quiet` / `-q` | Suppress progress detail (per-command preflight, diff samples). |
+| `--version` | Print the version — single-sourced with the package metadata. |
+
+Environment: `REBLE_PROFILE` selects a profile; `REBLE_CHANGE_SET` supplies
+a change-set id; `REBLE_<SECTION>__<KEY>` overrides any config path
+(`REBLE_COMPUTE_POLICY__PREFER=spark`).
 
 ## reble init
 
@@ -46,108 +62,158 @@ execute.
 reble run                        # scope inferred from your edits
 reble run --models stg,mart      # explicit scope
 reble run --refresh              # data-driven scope: upstream snapshots moved
-reble run --force                # rebuild even when SQL is unchanged
+reble run --force                # full rebuild, even when SQL is unchanged
 reble run --depth 2              # cap the downstream cascade
 reble run --dry-run              # preflight only, writes nothing
+reble run --events               # NDJSON progress stream
+reble run --engine spark         # one-off engine override
 ```
 
-`--change-set ID` keys the work (else git branch, else `REBLE_CHANGE_SET`,
-else the `local` default). `--branch NAME` resumes an existing data branch
-under this change-set. Idempotent per model; a model skips only when its
-SQL is unchanged *and* no in-scope parent ran. Incremental models always
-full-refresh on branches — announced, never silent. Exits `5` only via the
-verbs that treat empty scope as an error; an empty-scope `run` is legal and
-registers the branch.
+| Flag | Meaning |
+| --- | --- |
+| `--models a,b` | Explicit scope (plus downstream closure). Mutually exclusive with `--refresh`. |
+| `--refresh` | Data-driven scope: models whose upstream snapshots moved since their last run. The nightly-refresh verb. |
+| `--force` | Full rebuild — every model is in scope and re-runs even with unchanged SQL. The engine-switch and fresh-branch rebuild. |
+| `--depth N` | Cap the downstream cascade; models cut off are reported as stale. |
+| `--dry-run` | Preflight only: scope, branch plan, pin plan. Writes nothing. |
+| `--engine duckdb\|spark` | Override `compute_policy.prefer` for this run. |
+| `--change-set ID` | Key the work by this id (else git branch → `REBLE_CHANGE_SET` → `local`). |
+| `--branch NAME` | Resume an existing data branch under this change-set. |
+| `--events` | Stream `run.model.begin` / `run.model.end` NDJSON events on stdout (implies `--json`). |
+
+Idempotent per model; a model skips only when its SQL is unchanged *and*
+no in-scope parent ran. Re-runs replace, never append. An empty-scope `run`
+is legal and registers the branch (invariant 6). Exits `6` for
+unparseable model SQL.
 
 ## reble diff
 
 Row-level + schema diff of the branch's scope tables.
 
 ```bash
-reble diff                       # whole scope
+reble diff                       # whole scope, vs the branch point
 reble diff mart_orders           # specific tables
 reble diff --against main        # advisory "what would promote do"
-reble diff --schema-only
+reble diff --schema-only         # schema deltas, no row counts
 reble diff --rows 50             # save 50 sample rows per category
 reble diff --full                # save all changed rows
 ```
 
-The terminal shows one line per table: `+added / -removed / ~changed`
-counts and the schema delta. Sample rows are never dumped to the terminal —
-they are saved as JSON under `.reble/diffs/<change-set>/` (one file per
-table plus `summary.json`), refreshed on each diff. `--rows` caps how much
-detail is saved (default: `diff.max_rows_dumped`, 1000). Diff keys come
-from the model's `-- key:` header or `diff.keys` in config. Exits `7` when
-a table has no key and `on_missing_key: error`.
+The terminal shows live per-table progress and one stats line per table:
+`+added -removed ~changed (N unchanged)`. Sample rows are never dumped to
+the terminal — they are saved as JSON under `.reble/diffs/<change-set>/`
+(one file per table plus `summary.json`), refreshed on each diff.
+`--against main` writes to `<change-set>__vs_main/` so both comparisons
+coexist.
+
+| Flag | Meaning |
+| --- | --- |
+| `--against base\|main` | `base` = the branch point (what this change-set did); `main` = the promote preview. |
+| `--rows N` | Save N sample rows per category (default: `diff.max_rows_dumped`, 1000). |
+| `--full` | Save all changed rows, ignoring the cap. |
+| `--schema-only` | Schema deltas only; no row work. |
+
+Exits `7` when a table has no diff key and `on_missing_key: error`.
 
 ## reble status
 
 The "where was I?" answer — read-only, CI-safe.
 
 ```bash
-reble status --json
+reble status                     # text summary
+reble status --json              # machine envelope
 ```
 
-Sections: un-run code changes, branch scope, drifted pins, age/expiry.
-Exits `3` when drift is detected — point CI at it.
+Reports: un-run edits vs the change-set's hashes, drifted input pins
+(tag no longer equals main's head — exit `3`), branch age vs
+`branching.ttl_days`, and promote state. Clean = exit `0`; drift = exit
+`3`. This is the CI gate: run it on every PR.
 
 ## reble promote
 
-Accept the change: per-table fast-forwards of main to the branch heads.
+Fast-forward production to the branch. The accept button.
 
 ```bash
-reble promote --dry-run
-reble promote --ff-only    # refuse instead of re-running under drift
+reble promote                    # drift check → forced re-run if needed → FF
+reble promote --ff-only          # refuse instead of re-running (exit 4)
+reble promote --dry-run          # show the plan, touch nothing
 ```
 
-Fast-forward is legal only when every pinned input still equals main;
-otherwise Reble re-pins, re-runs the scope, emits the authoritative
-promote-time diff, then fast-forwards. Re-entrant: an interrupted promote
-resumes without double-applying. Exits `4` when blocked (`--ff-only` under
-drift, or a failed re-run).
+| Flag | Meaning |
+| --- | --- |
+| `--ff-only` | Refuse when any pin has drifted, instead of the forced scoped re-run + fresh diff. Exits `4` when blocked. |
+| `--dry-run` | Show drift state, per-table plan, and the promote-time diff without moving any refs. |
+| `--yes` / `-y` | Skip the confirmation prompt. |
+
+Promotion is per-table fast-forward — no merge, ever. A promote-time diff
+is computed and included in the envelope; PR-time diffs are advisory, this
+one is authoritative. Interrupted promotes resume: per-table progress is
+persisted, and completed tables are not re-done.
+
+## reble estimate
+
+Rough, local cost estimate from Iceberg metadata only — no data is scanned.
+
+```bash
+reble estimate                   # for the current scope
+reble estimate --refresh         # for the data-driven scope
+```
+
+Reports estimated bytes read and rows per scope table and pinned input.
+Honest about being rough (spec: accurate estimation is a non-goal).
 
 ## reble branch
 
 ```bash
-reble branch create <name> [--from REF] [--change-set ID]
-reble branch list
-reble branch show <name>
-reble branch discard <name> [--yes]
+reble branch create staging --from main   # explicit data branch
+reble branch list                         # branches + age + change-set
+reble branch show <name>                  # refs, pins, scope, last run
 ```
 
-Explicit branch management — required when `git_sync: false`. `discard`
-drops branch refs and pin tags, and refuses while a promote is in progress.
+`branch create` is the branch-first gesture: create a data branch before
+any model changes (invariant 5 — an empty scope is legal). `--change-set`
+registers an id for it. Branch names are sanitized
+(`branching.name_sanitization`) and disambiguated if the ref already
+exists on the tables.
+
+## reble discard
+
+Drop the change-set's branch and its pins. The other half of
+promote-or-discard — there is no merge.
+
+```bash
+reble discard                    # current change-set
+reble discard --change-set ID
+```
 
 ## reble gc
 
-Expire TTL'd branches, drop orphan pin tags.
+Clean up correctness-critical debris: expired branches and their pin tags.
 
 ```bash
-reble gc --dry-run
-reble gc --before 7
+reble gc                         # expire branches older than ttl_days
+reble gc --before 7              # custom age
 ```
 
-Orphan pin tags block snapshot expiration on production tables — this is a
-correctness command, not hygiene.
-
-## reble estimate
-
-Rough cost estimate before running — from Iceberg snapshot summaries only,
-nothing scanned.
-
-```bash
-reble estimate                  # scope inferred from your edits
-reble estimate --models stg     # explicit scope
-reble estimate --refresh        # data-driven scope preview
-```
-
-Models to run, per-table rows/bytes for scope tables and pinned inputs,
-summed bytes a run+diff will read. Warns about its own roughness by design
-— accurate estimation is deliberately not a goal.
+Runs the sequence in the safe order: fast-forward anything promotable that
+is a strict descendant of main, discard the rest, drop pin tags so
+`expire_snapshots` can reclaim data files. Without this, orphaned pin tags
+silently block snapshot expiry on production tables.
 
 ## reble mcp
 
-Run the MCP server (stdio) — the same verbs as tools for AI agents.
-Requires `pip install 'reble[mcp]'`; equivalent to the `reble-mcp` console
-script. Configured by the host with `REBLE_PROJECT_DIR` and optional
-`REBLE_PROFILE`.
+Start the MCP server (stdio) exposing the same verbs as tools for AI
+agents. Requires `pip install 'reble[mcp]'`. Tool surface and the agent
+change-set protocol are documented in SPEC §9.
+
+## Exit codes
+
+| Code | Meaning | Typical trigger |
+| --- | --- | --- |
+| `0` | success | — |
+| `2` | config / environment | unreachable catalog or state backend, bad `reble.yml` |
+| `3` | drift | `status`: a pinned input no longer equals main's head |
+| `4` | promote blocked | `promote --ff-only` with drift |
+| `5` | empty scope | verbs that require one (`diff` with nothing to diff) |
+| `6` | lineage error | unparseable model SQL, unknown dialect |
+| `7` | missing diff key | keyed diff on a table with no key and `on_missing_key: error` |

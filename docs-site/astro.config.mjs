@@ -31,6 +31,13 @@ export default defineConfig({
           ],
         },
         {
+          label: "Architecture",
+          items: [
+            { label: "How Reble works", slug: "how-it-works" },
+            { label: "Iceberg refs", slug: "iceberg-refs" },
+          ],
+        },
+        {
           label: "Guides",
           items: [
             { label: "AWS (Glue + S3)", slug: "aws" },
@@ -49,7 +56,10 @@ export default defineConfig({
         },
         {
           label: "Reference",
-          items: [{ label: "CLI", slug: "cli" }],
+          items: [
+            { label: "CLI", slug: "cli" },
+            { label: "Configuration", slug: "config" },
+          ],
         },
       ],
     }),
