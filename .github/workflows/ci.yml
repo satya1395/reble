@@ -33,7 +33,7 @@ jobs:
       - name: Install
         # setup-uv's python-version input already created .venv (VIRTUAL_ENV);
         # uv pip targets it automatically.
-        run: uv pip install -e ".[dev,mcp]"
+        run: uv pip install -e ".[dev,mcp,postgres]"
       - name: Lint
         run: uv run ruff check src/reble/ tests/
       - name: Test
