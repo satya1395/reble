@@ -30,9 +30,34 @@ jobs:
     environment: pypi
     permissions:
       id-token: write  # OIDC trusted publishing
+      contents: write  # create the GitHub release
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  release:
+    # A pushed tag alone only creates a tag — the Releases page needs this.
+    # Notes come from CHANGELOG.md's section for the tagged version.
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract changelog section
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          python3 - "$VER" <<'EOF' > release_body.md
+          import re, sys
+          ver = sys.argv[1]
+          text = open("CHANGELOG.md").read()
+          m = re.search(rf"^## {re.escape(ver)}.*?\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+          print(m.group(1).strip() if m else "See [CHANGELOG.md](../blob/main/CHANGELOG.md).")
+          EOF
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_body.md
+          generate_release_notes: false
