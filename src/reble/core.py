@@ -25,7 +25,7 @@ from .catalog import (
     snapshot_id_of,
 )
 from .config import ConfigLoader
-from .diff import diff_arrow, diff_snapshots, resolve_keys
+from .diff import diff_snapshots, resolve_keys
 from .duckio import DuckIo
 from .engine import DuckDbEngine, SparkEngine
 from .errors import DriftError, EmptyScope, RebleError
@@ -74,12 +74,6 @@ def list_tables(catalog) -> list[str]:
     return out
 
 
-def _empty_like(table):
-    import pyarrow as pa
-
-    return pa.table({f.name: [] for f in table.schema}, schema=table.schema)
-
-
 def _jsonable(obj):
     return json.loads(json.dumps(obj, default=str))
 
@@ -112,10 +106,28 @@ class Reble:
         self.store.validate()  # exit 2 before any verb if backend is broken
         self.state = self.store.load()
         self.catalog = load_catalog(self.cfg.warehouse.catalog)
-        engine_cls = (
-            SparkEngine if self.cfg.compute_policy.prefer == "spark" else DuckDbEngine
-        )
-        self.engine = engine_cls(self.cfg, self.catalog)
+        self._engine = None  # built on first use — metadata verbs skip it
+
+    @property
+    def engine(self):
+        """The execution engine, built on first access.
+
+        `branch list`/`status`/`estimate`-of-nothing never need it; building
+        eagerly made them open DuckDB and run the `LOAD iceberg` probe (a
+        network download on a cold machine) for nothing. SparkEngine is
+        cheap to build either way (its SparkSession is lazy), but the same
+        property covers both.
+        """
+        if self._engine is None:
+            engine_cls = (
+                SparkEngine if self.cfg.compute_policy.prefer == "spark" else DuckDbEngine
+            )
+            self._engine = engine_cls(self.cfg, self.catalog)
+        return self._engine
+
+    @engine.setter
+    def engine(self, value) -> None:
+        self._engine = value
 
     # ------------------------------------------------------------- resolution
 
@@ -454,10 +466,11 @@ class Reble:
                 if base_snap is not None:
                     io.register_snapshot(con, "base_tbl", table, base_snap, warnings)
                 else:
-                    # new-model branch: main holds only the zero-row seed
-                    con.register(
-                        "base_tbl",
-                        _empty_like(table.scan(snapshot_id=branch_snap).to_arrow()),
+                    # new-model branch: main holds only the zero-row seed.
+                    # Schema-only view — no need to read the branch to learn
+                    # the schema of an empty base.
+                    con.execute(
+                        'CREATE VIEW "base_tbl" AS SELECT * FROM "branch_tbl" WHERE FALSE'
                     )
 
                 model = graph.models.get(name)
@@ -775,6 +788,8 @@ class Reble:
             self.store.save(self.state)
 
             # Authoritative promote-time diff (PR diffs are advisory; this is not).
+            # Streamed through the same lazy iceberg_scan views as `reble diff`:
+            # memory bounded by DuckDB's memory_limit, not 2× the table in arrow.
             for model in scope.scope:
                 table_id = table_for_model(self.cfg, model)
                 try:
@@ -782,8 +797,6 @@ class Reble:
                     b = get_ref_snapshot(table, data_branch)
                     m = get_ref_snapshot(table, st.base_ref)
                     if b is not None and m is not None:
-                        branch_data = table.scan(snapshot_id=b).to_arrow()
-                        base_data = table.scan(snapshot_id=m).to_arrow()
                         model_node = graph.models.get(model)
                         keys = resolve_keys(
                             model,
@@ -791,10 +804,17 @@ class Reble:
                             model_node.diff_keys if model_node else [],
                             self.cfg.diff.on_missing_key,
                         )
-                        d = diff_arrow(
-                            table_id, base_data, branch_data, keys,
-                            max_rows_dumped=self.cfg.diff.max_rows_dumped,
-                        )
+                        io = DuckIo(self.cfg.engines.duckdb, self.reble_dir)
+                        con = io.connect()
+                        try:
+                            io.register_snapshot(con, "branch_tbl", table, b)
+                            io.register_snapshot(con, "base_tbl", table, m)
+                            d = diff_snapshots(
+                                con, table_id, keys,
+                                max_rows_dumped=self.cfg.diff.max_rows_dumped,
+                            )
+                        finally:
+                            con.close()
                         promote_diff[table_id] = d.to_dict()
                 except RebleError:
                     raise
