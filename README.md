@@ -114,21 +114,6 @@ commands on the [performance page](https://satya1395.github.io/reble/performance
 - Reads spill under a configurable `memory_limit` — working set bounded by
   config, not by RAM.
 
-## What it costs (ballpark)
-
-Illustrative list-price ranges for a 5-person team with a modest warehouse;
-your bill varies. The structural point: no second warehouse, no per-seat
-transform tooling, no cluster hours just to run SQL.
-
-| | Traditional stack (monthly) | With Reble (monthly) |
-| --- | --- | --- |
-| Transform compute | $200–800 (warehouse credits / cluster hours) | **$0** — DuckDB on your laptop/CI |
-| Test/staging environment | $300–1,000 (second warehouse, clones) | **$0** — branches are metadata |
-| Transformation tooling | $500+ ([dbt list: $100/seat + usage](https://www.getdbt.com/pricing)) | **$0** — Apache-2.0 OSS |
-| Scheduler | $0 (cron) – ~$300–500 ([MWAA](https://aws.amazon.com/managed-workflows-for-apache-airflow/pricing/) / [Astronomer](https://www.astronomer.io/pricing/)) | unchanged — keep what you have |
-| Storage + catalog (S3 + Glue) | ~$2–3 per 100 GB-month + request cents | same — it's your bucket either way |
-| **Ballpark total** | **~$1,000–2,800** | **≈ your storage bill** |
-
 ## Models are plain SQL
 
 **"Model" is just our word for one SQL file that creates one table.** If
