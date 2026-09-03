@@ -237,10 +237,11 @@ under a new change-set.
 
 ## Requirements
 
-- Python 3.10+
-- An Iceberg catalog (Glue, Polaris, Nessie, Hive, or any REST-compliant
-  one) — on AWS, `pip install 'reble[aws]'` and see the
-  [AWS quickstart](https://satya1395.github.io/reble/aws/)
+- Python 3.10–3.13 (3.14 not yet tested)
+- An S3 bucket + an Iceberg catalog (Glue, Polaris, Nessie, Hive, or any
+  REST-compliant one) — on AWS, `pip install 'reble[aws]'` and follow the
+  [AWS walkthrough](https://satya1395.github.io/reble/aws/) (covers bucket
+  creation, credentials, and every step from zero)
 - SQL models under `models/` (path configurable via `lineage.models_path`)
 
 ## Roadmap to 1.0
