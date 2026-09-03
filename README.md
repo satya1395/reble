@@ -4,6 +4,8 @@
 [![PyPI](https://img.shields.io/pypi/v/reble)](https://pypi.org/project/reble/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+*Reble* — pronounced **re-bl** (the final *e* is silent).
+
 **Reble is an open SQL engine for your Iceberg lakehouse.** Your models are
 plain SQL files; Reble derives their dependencies, builds the tables into
 your catalog and bucket, and refreshes exactly what moved — triggered by
@@ -100,6 +102,33 @@ flowchart LR
   equals current main; otherwise a scoped re-run and a fresh, promote-time
   diff. The PR diff is advisory; the promote diff is authoritative.
 
+## Performance
+
+Measured, reproducible, no clusters — full numbers and reproduction
+commands on the [performance page](https://satya1395.github.io/reble/performance/):
+
+- **Branch a 5M-row table: < 10 ms.** Branches are metadata-only.
+- **Full lifecycle on AWS (Glue + S3, 1M rows, from a laptop):** scoped
+  run ~13 s, keyed diff ~4 s, drift check ~2 s — with streaming reads
+  verified engaged (`iceberg_scan`, zero fallbacks).
+- Reads spill under a configurable `memory_limit` — working set bounded by
+  config, not by RAM.
+
+## What it costs (ballpark)
+
+Illustrative list-price ranges for a 5-person team with a modest warehouse;
+your bill varies. The structural point: no second warehouse, no per-seat
+transform tooling, no cluster hours just to run SQL.
+
+| | Traditional stack (monthly) | With Reble (monthly) |
+| --- | --- | --- |
+| Transform compute | $200–800 (warehouse credits / cluster hours) | **$0** — DuckDB on your laptop/CI |
+| Test/staging environment | $300–1,000 (second warehouse, clones) | **$0** — branches are metadata |
+| Transformation tooling | ~$500 (per-seat SaaS tiers) | **$0** — Apache-2.0 OSS |
+| Scheduler | cron $0 – Airflow ~$150–400 | unchanged — keep what you have |
+| Storage + catalog (S3 + Glue) | ~$2–3 per 100 GB-month + request cents | same — it's your bucket either way |
+| **Ballpark total** | **~$1,000–2,700** | **≈ your storage bill** |
+
 ## Models are plain SQL
 
 **"Model" is just our word for one SQL file that creates one table.** If
@@ -193,14 +222,22 @@ under a new change-set.
   [AWS quickstart](https://satya1395.github.io/reble/aws/)
 - SQL models under `models/` (path configurable via `lineage.models_path`)
 
-## Status
+## Roadmap to 1.0
 
-v0.3 — the full branch → run → diff → promote loop on DuckDB + pyiceberg,
-with change-set keying, event streams, catalog-side provenance, the MCP
-tool surface for agents, streaming out-of-core reads
-(`iceberg_scan` + spill), and `reble estimate`. Branch creation is
-metadata-only — measured at <10 ms on a 5M-row table. Next: the Spark
-runner.
+| Release | Theme | Highlights | Status |
+| --- | --- | --- | --- |
+| 0.4 | Runs on AWS | Glue + S3 verified end-to-end, credential auto-config, self-cleaning AWS smoke | ✅ shipped |
+| 0.5 | Bigger warehouses | Spark runner (local first, then serverless); GCS + ADLS verification; partitioned tables | next |
+| 0.6 | Team workflows | Documented CI recipes (PR checks, promote gates); multi-writer etiquette; `reble doctor` | planned |
+| 0.7 | Interop | REST catalogs verified (Polaris, Nessie); Trino read adapter on demand; Iceberg views | planned |
+| 0.8 | Operations | Metrics/log hooks; `estimate` v2; Windows support | planned |
+| **1.0** | **GA** | See criteria below | — |
+
+**GA criteria** — 1.0 ships when, not before: the JSON envelope, event
+streams, and exit codes have held stable through a full minor release;
+the lifecycle is green in CI on Glue + one REST catalog + sql; both
+engines (DuckDB, Spark) are real; at least three non-trivial warehouse
+deployments have run promote in production; and a security pass is done.
 
 ## License
 
