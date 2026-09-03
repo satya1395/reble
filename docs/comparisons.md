@@ -1,7 +1,8 @@
 # Comparisons
 
 The honest one-paragraph version of each, said the way we'd want it said
-about us.
+about us. For the stack-level view — what stays, what goes — see
+[What Reble replaces](replaces.md).
 
 ## Reble vs lakeFS
 

@@ -51,6 +51,7 @@ nav:
   - Airflow: airflow.md
   - Concepts: concepts.md
   - Comparisons: comparisons.md
+  - What Reble replaces: replaces.md
   - Command reference: cli.md
 
 not_in_nav: |
